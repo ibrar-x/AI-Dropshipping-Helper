@@ -1,30 +1,14 @@
-import React, { useState } from 'react';
-import { ProductCategory, GenerationPayload } from '../types';
+
+
+import React, { useState, useEffect } from 'react';
+import { GenerationPayload, CreativeOptions, GeneratedImage, GenerationOptionsProps as BaseGenerationOptionsProps } from '../types';
 import { PaperclipIcon } from './icons/PaperclipIcon';
+import { MegaphoneIcon } from './icons/MegaphoneIcon';
 
-interface GenerationOptionsProps {
-  productCategory: ProductCategory;
-  productDescription: string;
+interface GenerationOptionsProps extends BaseGenerationOptionsProps {
   onGenerate: (payload: GenerationPayload) => void;
+  onStartAdCreation: (image: GeneratedImage) => void;
 }
-
-const categoryOptionsConfig: Record<ProductCategory, { title: string; options: string[]; allowCustom: boolean }[]> = {
-    [ProductCategory.CLOTHING]: [
-        { title: 'Style', options: ['Streetwear', 'Vintage', 'Formal', 'Casual'], allowCustom: true },
-        { title: 'Pose', options: ['Standing', 'Walking', 'Sitting', 'Action Shot'], allowCustom: true },
-        { title: 'Setting', options: ['Urban City', 'Nature', 'Studio', 'Cafe'], allowCustom: true },
-    ],
-    [ProductCategory.HOME_GOODS]: [
-        { title: 'Material', options: ['Wood', 'Marble', 'Metal', 'Glass'], allowCustom: true },
-        { title: 'Placement', options: ['On a table', 'On a shelf', 'Living room', 'Minimalist'], allowCustom: true },
-        { title: 'Lighting', options: ['Bright & Airy', 'Moody', 'Natural', 'Studio'], allowCustom: true },
-    ],
-    [ProductCategory.GADGETS]: [
-        { title: 'Surface', options: ['Wooden desk', 'Tech workbench', 'Marble', 'Floating shelf'], allowCustom: true },
-        { title: 'Vibe', options: ['Minimalist', 'Futuristic', 'Cozy Office', 'Industrial'], allowCustom: true },
-        { title: 'Props', options: ['with a coffee cup', 'with a notebook', 'with plants', 'other gadgets'], allowCustom: true },
-    ],
-};
 
 const aspectRatios = [
     { label: 'Square', value: '1:1' },
@@ -72,7 +56,7 @@ const OptionGroup: React.FC<OptionGroupProps> = ({ title, options, allowCustom, 
                         placeholder="Custom..."
                         value={isCustom ? selection : ''}
                         onChange={(e) => onSelect(e.target.value)}
-                        className="flex-1 min-w-[100px] text-xs rounded-md border-dark-border bg-dark-input shadow-sm focus:border-brand-primary focus:ring-brand-primary px-2 py-1"
+                        className="flex-1 min-w-[100px] text-sm rounded-lg border-dark-border bg-dark-input shadow-sm focus:border-brand-primary focus:ring-brand-primary px-3 py-2"
                     />
                 )}
             </div>
@@ -81,11 +65,28 @@ const OptionGroup: React.FC<OptionGroupProps> = ({ title, options, allowCustom, 
 };
 
 
-const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productCategory, onGenerate }) => {
+const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productDescription, creativeOptions, originalImage, onGenerate, productCategory, onStartAdCreation }) => {
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [batchCount, setBatchCount] = useState('1');
   const [logoFile, setLogoFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (creativeOptions && Object.keys(creativeOptions).length > 0) {
+        setSelections(prev => {
+            const initialSelections = { ...prev };
+            const categoriesToPreselect: (keyof CreativeOptions)[] = ['Style', 'Camera Angle', 'Lens & Focus'];
+            
+            categoriesToPreselect.forEach(category => {
+                // Only pre-select if the user hasn't already made a choice in this category
+                if (!initialSelections[category] && creativeOptions[category]?.[0]) {
+                    initialSelections[category] = creativeOptions[category][0];
+                }
+            });
+            return initialSelections;
+        });
+    }
+}, [creativeOptions]);
 
   const handleSelection = (category: string, value: string) => {
     setSelections(prev => {
@@ -101,34 +102,39 @@ const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productCategory, 
       }
   };
 
-  const handleGenerateClick = () => {
+  const handleGenerateClick = async () => {
       const promptParts = Object.entries(selections)
         .filter(([, value]) => value) // Ensure value is not empty
         .map(([category, value]) => {
-            if (category === 'Props') return `with ${value}`;
-            return `${category.toLowerCase()}: ${value}`;
+            if (category.toLowerCase() === 'props') return `with ${value}`;
+            return value;
         });
 
-      let prompt = "A photorealistic lifestyle image of the product. " + (promptParts.join(', ') || "A beautiful, creative lifestyle setting.");
+      const simplePrompt = "A photorealistic lifestyle image of the product. " + (promptParts.join(', ') || "A beautiful, creative lifestyle setting.");
       
       const count = parseInt(batchCount, 10);
       const finalCount = isNaN(count) || count < 1 ? 1 : Math.min(count, 10);
 
-      onGenerate({ prompt, count: finalCount, logoFile, aspectRatio });
+      onGenerate({ 
+          prompt: simplePrompt, 
+          count: finalCount, 
+          logoFile, 
+          aspectRatio,
+          productDescription,
+          originalImage,
+      });
   }
-  
-  const availableOptions = categoryOptionsConfig[productCategory] || categoryOptionsConfig[ProductCategory.HOME_GOODS];
 
   return (
     <div className="mt-4 space-y-3 animate-slide-up">
-        {availableOptions.map(cat => (
+        {creativeOptions && Object.entries(creativeOptions).map(([title, options]) => (
             <OptionGroup 
-                key={cat.title}
-                title={cat.title}
-                options={cat.options.map(o => ({value: o}))}
-                allowCustom={cat.allowCustom}
-                selection={selections[cat.title] || ''}
-                onSelect={(value) => handleSelection(cat.title, value)}
+                key={title}
+                title={title}
+                options={options.map(o => ({value: o}))}
+                allowCustom={true}
+                selection={selections[title] || ''}
+                onSelect={(value) => handleSelection(title, value)}
             />
         ))}
 
@@ -151,7 +157,7 @@ const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productCategory, 
                     max="10"
                     value={batchCount}
                     onChange={(e) => setBatchCount(e.target.value)}
-                    className="w-full text-sm rounded-md border-dark-border bg-dark-input shadow-sm focus:border-brand-primary focus:ring-brand-primary"
+                    className="w-full text-sm rounded-lg border-dark-border bg-dark-input shadow-sm focus:border-brand-primary focus:ring-brand-primary px-3 py-2"
                 />
 
                 <label htmlFor="logo-upload" className="text-sm font-medium text-dark-text-secondary">Brand Logo:</label>
@@ -166,10 +172,25 @@ const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productCategory, 
         <div className="pt-2">
             <button 
                 onClick={handleGenerateClick}
-                className="w-full bg-brand-primary text-white font-bold py-2.5 px-4 rounded-lg hover:bg-brand-secondary transition-all duration-300 transform hover:scale-105"
+                className="w-full bg-brand-primary text-white font-bold py-2.5 px-4 rounded-lg hover:bg-brand-secondary transition-all duration-300 transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-wait disabled:scale-100"
             >
                 Generate Scene
             </button>
+             {originalImage && (
+                <>
+                    <div className="relative flex items-center justify-center my-3">
+                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-dark-border"></div>
+                        <span className="relative bg-dark-surface px-2 text-xs uppercase text-dark-text-secondary">Or</span>
+                    </div>
+                    <button
+                        onClick={() => onStartAdCreation(originalImage)}
+                        className="w-full flex items-center justify-center gap-2 bg-dark-input border border-dark-border text-dark-text-primary hover:bg-dark-border px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
+                    >
+                        <MegaphoneIcon className="w-5 h-5" />
+                        <span>Create Ad Campaign</span>
+                    </button>
+                </>
+            )}
         </div>
     </div>
   );

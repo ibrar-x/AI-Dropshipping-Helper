@@ -1,23 +1,43 @@
-import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { fileToBase64, dataURLtoBase64, getImageDimensions } from "../utils/imageUtils";
-import { ProductCategory, StructuredEditJob, EditType, DetectionResult, UpscaleOptions } from "../types";
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set.");
-}
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { GoogleGenAI, Modality, Type, Chat, Content } from "@google/genai";
+import { dataURLtoBase64, getImageDimensions, ensureSupportedImageFormat, createThumbnail } from "../utils/imageUtils";
+import { ProductCategory, SelectionAnalysis, EditType, DetectionResult, UpscaleOptions, CreativeOptions, GeneratedImage, Prompts, AdBrief } from "../types";
+import { defaultPrompts } from "../prompts";
+
+let ai: GoogleGenAI | null = null;
+let activePrompts: Prompts = defaultPrompts;
 const imageModel = 'gemini-2.5-flash-image-preview';
 const textModel = 'gemini-2.5-flash';
+
+export const initializeAi = (apiKey: string, newPrompts?: Prompts) => {
+    if (!apiKey) {
+        ai = null;
+        console.warn("AI Service not initialized: API key is missing.");
+        return;
+    }
+    ai = new GoogleGenAI({ apiKey });
+    if (newPrompts) {
+        activePrompts = newPrompts;
+    }
+};
+
+const getClient = (): GoogleGenAI => {
+    if (!ai) {
+        throw new Error("AI client is not initialized. Please set your API key in settings.");
+    }
+    return ai;
+};
 
 // Define a type for the parts for clarity
 type ImagePart = { inlineData: { data: string; mimeType: string; } };
 type TextPart = { text: string };
 type ContentPart = ImagePart | TextPart;
 
-async function generateImageFromParts(parts: ContentPart[], errorContext: string = 'Image generation'): Promise<{ id: string, src: string }> {
+async function generateImageFromParts(parts: ContentPart[], errorContext: string = 'Image generation'): Promise<GeneratedImage> {
+    const client = getClient();
     try {
-        const response = await ai.models.generateContent({
+        const response = await client.models.generateContent({
             model: imageModel,
             contents: { parts },
             config: {
@@ -25,20 +45,53 @@ async function generateImageFromParts(parts: ContentPart[], errorContext: string
             },
         });
 
-        const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+        const candidate = response.candidates?.[0];
+        const imagePart = candidate?.content?.parts?.find(part => part.inlineData);
+
         if (imagePart?.inlineData) {
+            const src = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            const thumbnailSrc = await createThumbnail(src, 256, 256).catch(err => {
+                console.warn("Could not create thumbnail for generated image:", err);
+                return undefined; // Fallback to undefined if thumbnail fails
+            });
             return {
                 id: `gen_${Date.now()}`,
-                src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+                src,
+                thumbnailSrc,
             };
         } else {
-            const safetyFeedback = response.candidates?.[0]?.safetyRatings;
-             if (safetyFeedback?.some(r => r.blocked)) {
-                console.warn('Safety feedback:', safetyFeedback);
-                const blockedReason = safetyFeedback.find(r => r.blocked)?.category;
-                 throw new Error(`Request blocked for safety reasons: ${blockedReason}. Please adjust your prompt.`);
+            // No image was returned. Let's investigate the reason.
+            const finishReason = candidate?.finishReason;
+            const safetyRatings = candidate?.safetyRatings;
+
+            // Check for safety blocks first
+            if (finishReason === 'SAFETY' || safetyRatings?.some(r => r.blocked)) {
+                const blockedCategories = safetyRatings?.filter(r => r.blocked).map(r => r.category.replace('HARM_CATEGORY_', '')).join(', ');
+                const message = `Image generation blocked due to safety policies${blockedCategories ? `: ${blockedCategories}` : ''}. Please modify your prompt.`;
+                console.warn('Safety block:', { finishReason, safetyRatings });
+                throw new Error(message);
             }
-            throw new Error(`${errorContext} failed to return an image.`);
+            
+            // Check if the model responded with text instead
+            const textPart = candidate?.content?.parts?.find(p => p.text);
+            if (textPart?.text) {
+                console.error(`${errorContext} returned text instead of an image:`, textPart.text);
+                // The model might explain why it couldn't generate the image. This is a valuable error message.
+                throw new Error(`The AI gave a text response instead of an image: "${textPart.text}"`);
+            }
+
+            // Fallback for other errors
+            console.error('Image generation failed for an unknown reason. Full response:', response);
+            let errorMessage = `${errorContext} failed to produce an image.`;
+            if (finishReason && finishReason !== 'STOP') {
+                errorMessage += ` The process ended unexpectedly (Reason: ${finishReason}). Please try again.`;
+            } else if (!candidate) {
+                errorMessage += ` The model did not provide a response. This could be a connection issue or an API problem.`;
+            }
+            else {
+                errorMessage += ` No image data was found in the response. Please try rewriting your prompt.`;
+            }
+            throw new Error(errorMessage);
         }
     } catch (error) {
         console.error(`Failed during: ${errorContext}`, error);
@@ -48,21 +101,16 @@ async function generateImageFromParts(parts: ContentPart[], errorContext: string
 }
 
 
-async function removeBackground(base64Image: string, mimeType: string): Promise<string> {
+export async function removeBackground(base64Image: string, mimeType: string): Promise<GeneratedImage> {
+    const errorContext = 'Background removal';
+    const client = getClient();
     try {
-        const response = await ai.models.generateContent({
+        const response = await client.models.generateContent({
             model: imageModel,
             contents: {
                 parts: [
-                    {
-                        inlineData: {
-                            data: base64Image,
-                            mimeType: mimeType,
-                        },
-                    },
-                    {
-                        text: 'Task: Remove background. The output must be a PNG image of the main subject with a transparent background.',
-                    },
+                    { inlineData: { data: base64Image, mimeType } },
+                    { text: activePrompts.removeBackground },
                 ],
             },
             config: {
@@ -70,106 +118,113 @@ async function removeBackground(base64Image: string, mimeType: string): Promise<
             },
         });
 
-        const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-        if (!imagePart || !imagePart.inlineData) {
-            throw new Error('Background removal failed: No image data returned.');
+        const candidate = response.candidates?.[0];
+        
+        const safetyFeedback = candidate?.safetyRatings;
+        if (safetyFeedback?.some(r => r.blocked)) {
+            console.warn(`Safety feedback for ${errorContext}:`, safetyFeedback);
+            const blockedReason = safetyFeedback.find(r => r.blocked)?.category;
+            throw new Error(`Request blocked for safety reasons: ${blockedReason}.`);
         }
-        return imagePart.inlineData.data;
+
+        const imagePart = candidate?.content?.parts?.find(part => part.inlineData);
+        if (imagePart?.inlineData) {
+            const src = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            const thumbnailSrc = await createThumbnail(src, 256, 256);
+            return { id: `bg_removed_${Date.now()}`, src, thumbnailSrc };
+        }
+
+        // If no image, check for a text response for better error reporting
+        const textPart = candidate?.content?.parts?.find(p => p.text);
+        if (textPart?.text) {
+            console.error(`${errorContext} returned text instead of an image:`, textPart.text);
+            throw new Error(`${errorContext} failed. The model responded with: "${textPart.text}"`);
+        }
+        
+        throw new Error(`${errorContext} failed: No image data was found in the response.`);
     } catch (error) {
-        console.error("Background removal error:", error);
-        if (error instanceof Error && error.message.includes('SAFETY')) {
-            throw new Error('Background removal was blocked due to safety policies.');
+        console.error(`${errorContext} error:`, error);
+        if (error instanceof Error) {
+            // Re-throw the specific error from the try block for better user feedback
+            throw new Error(`Could not remove background. Reason: ${error.message}`);
         }
-        throw new Error('Could not remove background from image.');
+        throw new Error('An unexpected error occurred while removing the background.');
     }
 }
 
-export const enhancePrompt = async (prompt: string): Promise<string> => {
-    if (!prompt.trim()) return prompt;
+export async function* generateTextStream(prompt: string, systemInstruction: string) {
+    if (!prompt.trim()) return;
+    const client = getClient();
     try {
-        const response = await ai.models.generateContent({
+        const response = await client.models.generateContentStream({
             model: textModel,
             contents: prompt,
-            config: {
-                systemInstruction: "You are a creative assistant that expands upon user prompts for an AI image generator. Rewrite the following prompt to be more descriptive, vivid, and detailed, focusing on creating a photorealistic, high-quality image. Only return the enhanced prompt text, without any preamble."
-            }
+            config: { systemInstruction }
         });
-        return response.text.trim();
+        for await (const chunk of response) {
+            yield chunk.text;
+        }
     } catch (error) {
-        console.error("Prompt enhancement error:", error);
-        return prompt; // Return original prompt on error
+        console.error("Text stream error:", error);
+        if (error instanceof Error) {
+            yield `Error: ${error.message}`;
+        } else {
+            yield "An unknown error occurred while generating the response.";
+        }
     }
-};
+}
 
-export const analyzeEditIntent = async (userPrompt: string): Promise<StructuredEditJob> => {
-    const systemInstruction = `You are an Image Edit Orchestrator assistant. Your task is to analyze a user's natural language request for an image edit and convert it into a structured JSON command for an AI image generation model.
-
-You must classify the user's intent into one of the following categories:
-- 'inpaint': For removing an object, filling a scratch, or general context-aware fill.
-- 'recolor': For changing the color or material hue of an object while preserving its texture and shape.
-- 'replace': For swapping the texture or material of an object with something completely different.
-- 'relight': For adjusting the lighting, shadows, or mood.
-- 'add_object': For inserting a new, distinct object into the scene.
-
-Based on the user's request, you must also generate a concise, direct 'model_prompt' that instructs the image model on what to do within the masked region.
-
-Example 1:
-User request: "get rid of this tag"
-Your JSON output: {"edit_type": "inpaint", "model_prompt": "remove the tag from the object"}
-
-Example 2:
-User request: "make the sofa velvet red"
-Your JSON output: {"edit_type": "recolor", "model_prompt": "change the color of the sofa to velvet red"}
-
-Example 3:
-User request: "change this wooden table to have a marble texture"
-Your JSON output: {"edit_type": "replace", "model_prompt": "replace the texture of the table with white marble with gray veins"}
-
-Example 4:
-User request: "add a golden retriever puppy here"
-Your JSON output: {"edit_type": "add_object", "model_prompt": "add a small, photorealistic golden retriever puppy"}
-
-Now, analyze the user's request provided.`;
+export const analyzeSelection = async (
+    baseImageDataUrl: string,
+    maskDataUrl: string,
+    highlightDataUrl: string,
+): Promise<SelectionAnalysis> => {
+    const client = getClient();
+    const { base64: baseImageBase64, mimeType: baseImageMimeType } = dataURLtoBase64(baseImageDataUrl);
+    const { base64: maskImageBase64 } = dataURLtoBase64(maskDataUrl);
+    const { base64: highlightImageBase64, mimeType: highlightImageMimeType } = dataURLtoBase64(highlightDataUrl);
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await client.models.generateContent({
             model: textModel,
-            contents: userPrompt,
+            contents: {
+                parts: [
+                    { inlineData: { data: baseImageBase64, mimeType: baseImageMimeType } },
+                    { inlineData: { data: maskImageBase64, mimeType: 'image/png' } },
+                    { inlineData: { data: highlightImageBase64, mimeType: highlightImageMimeType } },
+                    { text: "Analyze the highlighted selection in the image." },
+                ]
+            },
             config: {
-                systemInstruction,
+                systemInstruction: activePrompts.analyzeSelection,
                 responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        edit_type: { type: Type.STRING, enum: ['inpaint', 'recolor', 'replace', 'relight', 'add_object'] },
-                        model_prompt: { type: Type.STRING }
+                        selection_summary: { type: Type.STRING },
+                        suggested_actions: { type: Type.ARRAY, items: { type: Type.STRING } }
                     },
-                    required: ['edit_type', 'model_prompt']
+                    required: ['selection_summary', 'suggested_actions']
                 }
             }
         });
-        const jsonResponse = JSON.parse(response.text);
-        return jsonResponse as StructuredEditJob;
-
+        return JSON.parse(response.text) as SelectionAnalysis;
     } catch (error) {
-        console.error("Edit intent analysis error:", error);
-        // Fallback to a generic inpaint prompt
-        return {
-            edit_type: 'inpaint',
-            model_prompt: userPrompt
-        };
+        console.error("Selection analysis error:", error);
+        throw new Error(error instanceof Error ? error.message : 'Failed to analyze selection.');
     }
 };
 
 export const detectProductCategory = async (file: File): Promise<DetectionResult> => {
-    const { base64, mimeType } = await fileToBase64(file);
+    const client = getClient();
+    const { base64, mimeType } = await ensureSupportedImageFormat(file);
     try {
-        const response = await ai.models.generateContent({
+        const response = await client.models.generateContent({
             model: textModel,
             contents: {
                 parts: [
                     { inlineData: { data: base64, mimeType } },
-                    { text: `Analyze the product in this image. First, provide a short, specific description of the item (e.g., 'a pair of black wireless headphones', 'a blue ceramic mug'). Then, classify it into ONE of the following categories: 'Clothing', 'Home Goods', 'Gadgets'. Respond with a JSON object with "category" and "description" keys.` },
+                    { text: activePrompts.detectProductCategory },
                 ]
             },
             config: {
@@ -199,58 +254,211 @@ export const detectProductCategory = async (file: File): Promise<DetectionResult
     }
 };
 
-export const generateLifestyleImage = async (
-    productFile: File,
-    prompt: string,
-    vibeFile?: File | null,
-    logoFile?: File | null,
-    aspectRatio?: string,
-): Promise<{ id: string, src: string }> => {
-    const { base64: productBase64, mimeType: productMimeType } = await fileToBase64(productFile);
-    const noBgBase64 = await removeBackground(productBase64, productMimeType);
-
-    const parts: ContentPart[] = [];
-    parts.push({
-        inlineData: { data: noBgBase64, mimeType: 'image/png' }
-    });
-
-    let fullPrompt = `Place this first product image (with a transparent background) into a new scene. IMPORTANT: The product itself (from the first image) must not be altered in any way—its design, color, and shape must remain identical. The new scene should be based on this prompt: "${prompt}".`;
-
-    if (vibeFile) {
-        const { base64: vibeBase64, mimeType: vibeMimeType } = await fileToBase64(vibeFile);
-        parts.push({
-            inlineData: { data: vibeBase64, mimeType: vibeMimeType }
-        });
-        fullPrompt += ` The scene's style, mood, and color palette should be heavily inspired by the second image provided.`;
+const adBriefPrefillSchema = {
+    type: Type.OBJECT,
+    properties: {
+        product: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING },
+                category: { type: Type.STRING },
+                features: { type: Type.STRING },
+                benefits: { type: Type.STRING },
+            }
+        },
+        targetAudience: {
+            type: Type.OBJECT,
+            properties: {
+                types: { type: Type.ARRAY, items: { type: Type.STRING } },
+            }
+        },
+        tone: {
+            type: Type.OBJECT,
+            properties: {
+                primary: { type: Type.STRING },
+                secondary: { type: Type.STRING },
+            }
+        },
+        visuals: {
+            type: Type.OBJECT,
+            properties: {
+                style: { type: Type.STRING },
+            }
+        }
     }
-    
-    if (logoFile) {
-        const { base64: logoBase64, mimeType: logoMimeType } = await fileToBase64(logoFile);
-        parts.push({
-            inlineData: { data: logoBase64, mimeType: logoMimeType }
-        });
-        fullPrompt += ` The final provided image is a brand logo. Place this logo subtly and naturally in a corner of the final generated image.`;
-    }
-
-    const requestedAspectRatio = aspectRatio || '1:1';
-    fullPrompt += ` The final image should be a photorealistic lifestyle shot. CRITICAL REQUIREMENT: The final output image's aspect ratio must be exactly ${requestedAspectRatio}. This is a non-negotiable instruction.`;
-    parts.push({ text: fullPrompt });
-
-    return generateImageFromParts(parts, 'Lifestyle image generation');
 };
+
+export const prefillAdBriefFromImage = async (file: File): Promise<Partial<AdBrief>> => {
+    const client = getClient();
+    const { base64, mimeType } = await ensureSupportedImageFormat(file);
+    try {
+        const response = await client.models.generateContent({
+            model: textModel,
+            contents: {
+                parts: [
+                    { inlineData: { data: base64, mimeType } },
+                    { text: "Analyze the product and generate a marketing brief." },
+                ]
+            },
+            config: {
+                systemInstruction: activePrompts.prefillAdBrief,
+                responseMimeType: 'application/json',
+                responseSchema: adBriefPrefillSchema,
+            }
+        });
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as Partial<AdBrief>;
+    } catch (error) {
+        console.error("Ad Brief prefill error:", error);
+        return {};
+    }
+};
+
+const adBriefSchema = {
+    type: Type.OBJECT,
+    properties: {
+        platforms: { type: Type.ARRAY, items: { type: Type.STRING } },
+        campaignGoal: { type: Type.STRING },
+        targetAudience: {
+            type: Type.OBJECT,
+            properties: {
+                types: { type: Type.ARRAY, items: { type: Type.STRING } },
+                painPoints: { type: Type.STRING },
+                desires: { type: Type.STRING },
+                objections: { type: Type.STRING },
+                custom: { type: Type.STRING },
+            }
+        },
+        product: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING },
+                category: { type: Type.STRING },
+                features: { type: Type.STRING },
+                benefits: { type: Type.STRING },
+                usp: { type: Type.STRING },
+                price: { type: Type.STRING },
+                offer: { type: Type.STRING },
+                proof: { type: Type.STRING },
+            }
+        },
+        tone: {
+            type: Type.OBJECT,
+            properties: {
+                primary: { type: Type.STRING },
+                secondary: { type: Type.STRING },
+            }
+        },
+        structure: { type: Type.ARRAY, items: { type: Type.STRING } },
+        compliance: {
+            type: Type.OBJECT,
+            properties: {
+                region: { type: Type.STRING },
+                wordsToAvoid: { type: Type.STRING },
+                mustInclude: { type: Type.STRING },
+                charLimits: { type: Type.STRING },
+            }
+        },
+        visuals: {
+            type: Type.OBJECT,
+            properties: {
+                hasImages: { type: Type.BOOLEAN },
+                needsPrompts: { type: Type.BOOLEAN },
+                style: { type: Type.STRING },
+                palette: { type: Type.STRING },
+                onImageText: { type: Type.STRING },
+            }
+        }
+    }
+};
+
+export const autocompleteAdBrief = async (partialBrief: Partial<AdBrief>): Promise<Partial<AdBrief>> => {
+    const client = getClient();
+    const prompt = `Here is the partial ad brief, please complete it:\n\n${JSON.stringify(partialBrief, null, 2)}`;
+    try {
+        const response = await client.models.generateContent({
+            model: textModel,
+            contents: prompt,
+            config: {
+                systemInstruction: activePrompts.autocompleteAdBrief,
+                responseMimeType: 'application/json',
+                responseSchema: adBriefSchema,
+            }
+        });
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as Partial<AdBrief>;
+    } catch (error) {
+        console.error("Ad Brief autocomplete error:", error);
+        // Throw the error so the UI can handle it
+        throw new Error(error instanceof Error ? `AI Autocomplete Failed: ${error.message}` : 'An unknown error occurred during autocomplete.');
+    }
+};
+
+
+export const generateCreativeOptions = async (file: File): Promise<CreativeOptions> => {
+    const client = getClient();
+    const { base64, mimeType } = await ensureSupportedImageFormat(file);
+
+    try {
+        const response = await client.models.generateContent({
+            model: textModel,
+            contents: {
+                parts: [
+                    { inlineData: { data: base64, mimeType } },
+                    { text: "Generate creative ideas for this product." },
+                ]
+            },
+            config: {
+                systemInstruction: activePrompts.generateCreativeOptions,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        Style: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        Setting: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        Vibe: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        Props: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        'Camera Angle': { type: Type.ARRAY, items: { type: Type.STRING } },
+                        'Lens & Focus': { type: Type.ARRAY, items: { type: Type.STRING } },
+                    },
+                    required: ['Style', 'Setting', 'Vibe', 'Props', 'Camera Angle', 'Lens & Focus']
+                }
+            }
+        });
+        return JSON.parse(response.text);
+    } catch (error) {
+        console.error("Creative options generation error:", error);
+        // Fallback to static options
+        return {
+            Style: ['Hyperrealistic Photo', 'Clean Studio Shot', 'Moody & Dramatic', 'Commercial Look'],
+            Setting: ['On a table', 'On a shelf', 'In a living room', 'Minimalist background'],
+            Vibe: ['Bright & Airy', 'Natural Sunlight', 'Elegant & Modern', 'Cozy & Warm'],
+            Props: ['with a coffee cup', 'with a notebook', 'with plants', 'other related gadgets'],
+            'Camera Angle': ['Eye-level shot', 'Low-angle shot', 'High-angle shot', 'Dutch angle'],
+            'Lens & Focus': ['50mm lens, f/1.8', '85mm lens, shallow depth of field', '35mm lens, deep focus', 'Macro shot'],
+        };
+    }
+};
+
+export const generateStudioBackground = async (imageDataUrl: string): Promise<GeneratedImage> => {
+    const { base64, mimeType } = dataURLtoBase64(imageDataUrl);
+    
+    const parts: ContentPart[] = [
+        { inlineData: { data: base64, mimeType } },
+        { text: activePrompts.generateStudioBackground }
+    ];
+
+    return generateImageFromParts(parts, 'Studio background generation');
+};
+
 
 export const refineLifestyleImage = async (
     imageDataUrl: string,
     prompt: string,
-): Promise<{ id: string; src: string }> => {
+): Promise<GeneratedImage> => {
     const { base64, mimeType } = dataURLtoBase64(imageDataUrl);
-
-    const { width, height } = await getImageDimensions(imageDataUrl);
-    const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
-    const commonDivisor = gcd(width, height);
-    const aspectRatio = `${width / commonDivisor}:${height / commonDivisor}`;
     
-    const fullPrompt = `Refine this image based on the following instruction: "${prompt}". The final image should maintain the subject but incorporate the changes. CRITICAL REQUIREMENT: Ensure the final image has the exact same aspect ratio as the original, which is ${aspectRatio}. Do not change the aspect ratio.`;
+    const fullPrompt = activePrompts.refineLifestyle.replace('{prompt}', prompt);
     
     const parts: ContentPart[] = [
         { inlineData: { data: base64, mimeType } },
@@ -263,48 +471,49 @@ export const refineLifestyleImage = async (
 export const editImageWithMask = async (
     imageDataUrl: string,
     maskDataUrl: string,
+    highlightDataUrl: string,
     prompt: string,
-): Promise<{ id: string; src: string }> => {
+    referenceImages?: File[]
+): Promise<GeneratedImage> => {
     const { base64: baseImageBase64, mimeType: baseImageMimeType } = dataURLtoBase64(imageDataUrl);
     const { base64: maskImageBase64 } = dataURLtoBase64(maskDataUrl);
+    const { base64: highlightImageBase64, mimeType: highlightImageMimeType } = dataURLtoBase64(highlightDataUrl);
 
-    const fullPrompt = `Using the provided mask, edit the original image based on this instruction: "${prompt}". The white area of the mask indicates the part of the image to be changed. Preserve the rest of the image (the black area). Only return the edited image.`;
+    const fullPrompt = activePrompts.editImageWithMask.replace('{prompt}', prompt);
     
     const parts: ContentPart[] = [
         { inlineData: { data: baseImageBase64, mimeType: baseImageMimeType } },
         { inlineData: { data: maskImageBase64, mimeType: 'image/png' } },
-        { text: fullPrompt },
+        { inlineData: { data: highlightImageBase64, mimeType: highlightImageMimeType } },
     ];
+
+    if (referenceImages && referenceImages.length > 0) {
+        parts.push({ text: "Use the following image(s) as a style and content reference for the edit:" });
+        for (const file of referenceImages) {
+            const { base64, mimeType } = await ensureSupportedImageFormat(file);
+            parts.push({ inlineData: { data: base64, mimeType } });
+        }
+    }
     
-    return generateImageFromParts(parts, 'Image editing with mask');
+    parts.push({ text: fullPrompt });
+    
+    return generateImageFromParts(parts, `Image editing`);
 };
+
 
 export const upscaleImage = async (
     imageDataUrl: string,
     options: UpscaleOptions,
-): Promise<{ id: string; src: string }> => {
+): Promise<GeneratedImage> => {
     const { base64, mimeType } = dataURLtoBase64(imageDataUrl);
     const { factor, profile, removeArtifacts, preserveFaces, enhanceDetails } = options;
 
-    let prompt = `You are a professional Image Upscale Orchestrator. Your task is to upscale the provided image with extreme precision, acting as a specialized inference engine.
-
-**Upscale Job Configuration:**
-- **Upscale Factor:** ${factor}x
-- **Image Profile:** ${profile}
-- **Artifact Removal:** ${removeArtifacts ? 'Enabled (JPEG ringing, banding, aliasing)' : 'Disabled'}
-- **Face Preservation:** ${preserveFaces ? 'Enabled (High-fidelity face restoration)' : 'Disabled'}
-- **Detail Enhancement (Hallucination):** ${enhanceDetails ? 'Enabled (Subtly add plausible micro-details)' : 'Disabled'}
-
-**Core Instructions:**
-1.  Upscale the provided image to ${factor} times its original resolution.
-2.  Adhere strictly to the selected **Image Profile**.
-    -   For **'Photo'**: Prioritize realism, accurate skin tones, and texture. If 'Face Preservation' is enabled, restore facial details without altering identity.
-    -   For **'Product'**: Maintain material textures (fabric grain, wood pores, metal brush) and product shape integrity.
-    -   For **'Text / Artwork'**: Preserve sharp edges, lines, and typographic clarity. Prevent bleeding or aliasing on text and vector-style art.
-    -   For **'Default'**: Apply a balanced, general-purpose upscaling algorithm.
-3.  If **Artifact Removal** is enabled, clean the image of compression artifacts before upscaling.
-4.  If **Detail Enhancement** is disabled, you MUST NOT hallucinate or invent new content. The output must be a crisper, higher-resolution version of the original.
-5.  The final output must be only the upscaled image. Do not add text or other elements.`;
+    let prompt = activePrompts.upscaleImage
+        .replace('{factor}', factor.toString())
+        .replace('{profile}', profile)
+        .replace('{removeArtifacts}', removeArtifacts ? 'Enabled (JPEG ringing, banding, aliasing)' : 'Disabled')
+        .replace('{preserveFaces}', preserveFaces ? 'Enabled (High-fidelity face restoration)' : 'Disabled')
+        .replace('{enhanceDetails}', enhanceDetails ? 'Enabled (Subtly add plausible micro-details)' : 'Disabled');
     
     const parts: ContentPart[] = [
         { inlineData: { data: base64, mimeType } },
@@ -313,3 +522,182 @@ export const upscaleImage = async (
 
     return generateImageFromParts(parts, 'Image upscaling');
 };
+
+export async function* enhancePromptStream(prompt: string, systemInstruction: string) {
+    yield* generateTextStream(`Enhance this: "${prompt}"`, systemInstruction);
+}
+
+export const generateAdImage = async (prompt: string, aspectRatio: string, numberOfImages: number, referenceInputs?: (File | {dataUrl: string})[]): Promise<GeneratedImage[]> => {
+    const client = getClient();
+    try {
+        const parts: ContentPart[] = [{ text: prompt }];
+        if (referenceInputs) {
+            for (const input of referenceInputs) {
+                let base64: string, mimeType: string;
+                if ('dataUrl' in input) {
+                    const d = dataURLtoBase64(input.dataUrl);
+                    base64 = d.base64;
+                    mimeType = d.mimeType;
+                } else { // it's a File
+                    const d = await ensureSupportedImageFormat(input);
+                    base64 = d.base64;
+                    mimeType = d.mimeType;
+                }
+                parts.unshift({ inlineData: { data: base64, mimeType } });
+            }
+        }
+        
+        const modelToUse = (referenceInputs && referenceInputs.length > 0) ? imageModel : 'imagen-4.0-generate-001';
+
+        if (modelToUse === 'imagen-4.0-generate-001') {
+            const response = await client.models.generateImages({
+                model: 'imagen-4.0-generate-001',
+                prompt: prompt,
+                config: {
+                    numberOfImages: numberOfImages,
+                    outputMimeType: 'image/png',
+                    aspectRatio: aspectRatio as "1:1" | "16:9" | "9:16" | "4:3" | "3:4",
+                },
+            });
+
+            if (response.generatedImages && response.generatedImages.length > 0) {
+                const imagePromises = response.generatedImages.map(async (genImg, index) => {
+                    const base64ImageBytes: string = genImg.image.imageBytes;
+                    const src = `data:image/png;base64,${base64ImageBytes}`;
+                    const thumbnailSrc = await createThumbnail(src, 256, 256);
+                    return { id: `gen_ad_${Date.now()}_${index}`, src, thumbnailSrc };
+                });
+                return Promise.all(imagePromises);
+            }
+        } else { // Fallback to gemini-2.5-flash-image-preview
+             const images: GeneratedImage[] = [];
+             for (let i = 0; i < numberOfImages; i++) {
+                 const image = await generateImageFromParts(parts, `Ad image generation #${i + 1}`);
+                 images.push(image);
+             }
+             return images;
+        }
+        
+        throw new Error('Image generation failed to produce an image. This might be due to safety filters.');
+
+    } catch (error) {
+        console.error(`Failed during: Ad image generation`, error);
+        if (error instanceof Error) throw error;
+        throw new Error(`An unexpected error occurred during Ad image generation.`);
+    }
+};
+
+export const blendImages = async (
+    compositeImageDataUrl: string,
+    prompt: string,
+): Promise<GeneratedImage> => {
+    const { base64, mimeType } = dataURLtoBase64(compositeImageDataUrl);
+    
+    const fullPrompt = `You are an expert AI image editor. You are provided with a composite image containing multiple elements arranged by a user. Your task is to blend these elements into a single, new, cohesive, and photorealistic scene based on the following instruction: "${prompt}". The final image should be a creative interpretation that honors the user's composition and prompt. Your entire response must be ONLY the final image data. Do not include any text, explanation, or conversational filler.`;
+    
+    const parts: ContentPart[] = [
+        { inlineData: { data: base64, mimeType } },
+        { text: fullPrompt }
+    ];
+
+    return generateImageFromParts(parts, 'Image blending');
+};
+
+export const removeLogoBackground = async (logoFile: File): Promise<string> => {
+    const { base64, mimeType } = await ensureSupportedImageFormat(logoFile);
+    const result = await removeBackground(base64, mimeType);
+    return result.src;
+};
+
+
+export const generateImageAdPrompt = async (brief: Pick<AdBrief, 'visuals' | 'product'>, imageFile?: File): Promise<string> => {
+    const client = getClient();
+    const briefText = `Generate a prompt for the following ad brief:\n${JSON.stringify(brief, null, 2)}`;
+    
+    const parts: ContentPart[] = [{ text: briefText }];
+
+    if (imageFile) {
+        const { base64, mimeType } = await ensureSupportedImageFormat(imageFile);
+        parts.unshift({ inlineData: { data: base64, mimeType } });
+    }
+
+    try {
+        const response = await client.models.generateContent({
+            model: textModel,
+            contents: { parts },
+            config: {
+                systemInstruction: activePrompts.generateImageAdPrompt
+            }
+        });
+        return response.text.trim();
+    } catch (error) {
+        console.error("Image ad prompt generation error:", error);
+        throw new Error(error instanceof Error ? `Failed to generate image prompt: ${error.message}` : 'Unknown error during prompt generation.');
+    }
+};
+
+export function generateAdCopy(brief: AdBrief) {
+    const briefText = JSON.stringify(brief, null, 2);
+    return generateTextStream(briefText, activePrompts.generateAdCopy);
+}
+
+export const suggestVisualPrompts = async (imageFile: File, count: number): Promise<string[]> => {
+    const client = getClient();
+    try {
+        const { base64, mimeType } = await ensureSupportedImageFormat(imageFile);
+        
+        const dynamicSystemInstruction = `You are a world-class creative director for e-commerce brands. The user has provided an image of their product with a transparent background.
+Your task is to generate ${count} distinct, creative, and compelling text-to-image prompt ideas for a lifestyle or ad photoshoot featuring this product.
+The prompts should be diverse, covering different styles (e.g., minimalist, rustic, modern, vibrant).
+Your entire response MUST be a single, valid JSON object with a single key "suggestions", which is an array of strings.`;
+
+        const response = await client.models.generateContent({
+            model: textModel,
+            contents: {
+                parts: [
+                    { inlineData: { data: base64, mimeType } },
+                    { text: `Suggest ${count} creative visual prompts for this product.` }
+                ]
+            },
+            config: {
+                systemInstruction: dynamicSystemInstruction,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        suggestions: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    },
+                    required: ['suggestions']
+                }
+            }
+        });
+        const jsonResponse = JSON.parse(response.text);
+        if (jsonResponse.suggestions && Array.isArray(jsonResponse.suggestions)) {
+            return jsonResponse.suggestions;
+        }
+        return [];
+    } catch (error) {
+        console.error("Visual prompt suggestion error:", error);
+        return []; // Return empty array on error
+    }
+};
+
+export const editLogo = async (logoFile: File, prompt: string): Promise<string> => {
+    const { base64, mimeType } = await ensureSupportedImageFormat(logoFile);
+    
+    const parts: ContentPart[] = [
+        { inlineData: { data: base64, mimeType } },
+        { text: `${activePrompts.editLogo}\n\nInstruction: "${prompt}"` }
+    ];
+
+    const result = await generateImageFromParts(parts, 'Logo editing');
+    return result.src;
+};
+
+export function generatePlatformContentStream(platform: string, brief: AdBrief, userPrompt: string) {
+    const briefText = `PRODUCT BRIEF:\n${JSON.stringify(brief.product, null, 2)}\n\nUSER REQUEST FOR ${platform}:\n${userPrompt}`;
+    return generateTextStream(briefText, activePrompts.generatePlatformContent);
+}

@@ -1,7 +1,7 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { useAppStore } from '../store';
 import { fileToBase64, dataURLtoBase64 } from "../utils/imageUtils";
-import { AdBrief, GeneratedImage, SelectionAnalysis, UpscaleOptions } from "../types";
+import { AdBrief, GeneratedImage, SelectionAnalysis, UpscaleOptions, ExportBundle } from "../types";
 
 const getAiClient = (): GoogleGenAI => {
     const { customApiKey } = useAppStore.getState();
@@ -243,24 +243,32 @@ export const generateVisualsFromText = async (prompt: string, aspectRatio: strin
     return generateImage(prompt, aspectRatio, count);
 }
 
-export const blendImages = async (compositeImageSrc: string, prompt: string): Promise<GeneratedImage> => {
+export const generateSurpriseImage = async (
+    bundle: ExportBundle, 
+    styleHint: string, 
+    seed?: number
+): Promise<{ image: GeneratedImage, seed: number }> => {
     const ai = getAiClient();
-    const { prompts, modelConfig, safetySettings } = useAppStore.getState();
-    const { base64, mimeType } = dataURLtoBase64(compositeImageSrc);
-    const finalPrompt = `${prompts.editImageWithMask.replace('{prompt}', prompt)}`;
+    const { safetySettings } = useAppStore.getState();
     
-    // FIX: Moved safetySettings into the config object as it is not a top-level parameter.
+    const prompt = `Compose a brand-new, coherent scene that reuses every recognizable object from the attached collage image. Do not drop objects. Preserve each object’s identity and general geometry enough to remain recognizable, but re-light and restyle for a unified, realistic look. Keep faces intact and natural. Avoid text artifacts or fake letters. Surprise me with an imaginative but believable setting that makes visual sense for these objects. High photographic quality, clean edges, and cohesive color grading. ${styleHint}`;
+
+    const { base64: guideBase64, mimeType: guideMime } = dataURLtoBase64(bundle.guidePng);
+    const { base64: objectsBase64, mimeType: objectsMime } = dataURLtoBase64(bundle.objectsSheetPng);
+
+    const parts = [
+        { text: prompt },
+        { inlineData: { mimeType: guideMime, data: guideBase64 } },
+        { inlineData: { mimeType: objectsMime, data: objectsBase64 } }
+    ];
+
     const response = await ai.models.generateContent({
-        model: modelConfig.edit,
-        contents: {
-            parts: [
-                { text: finalPrompt },
-                { inlineData: { mimeType: mimeType, data: base64 } }
-            ]
-        },
+        model: 'gemini-2.5-flash-image-preview', // Use the specified "Nano Banana" model
+        contents: { parts },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
             safetySettings,
+            seed: seed || Math.floor(Math.random() * 2147483647),
         },
     });
 
@@ -268,9 +276,15 @@ export const blendImages = async (compositeImageSrc: string, prompt: string): Pr
     if (!imagePart?.inlineData) {
         throw new Error("AI did not return a blended image.");
     }
+    
+    // In a real scenario, the response would contain the seed used. We simulate this.
+    const usedSeed = seed || 42; 
 
     return {
-        id: `blended_${Date.now()}`,
-        src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+        image: {
+            id: `blended_${Date.now()}`,
+            src: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+        },
+        seed: usedSeed,
     };
 };

@@ -90,7 +90,7 @@ export interface SelectionAnalysis {
 
 // For Image Upscaler
 export type UpscaleFactor = 2 | 4 | 8;
-export type UpscaleProfile = 'Default' | 'Photo' | 'Product' | 'Text / Artwork';
+export type UpscaleProfile = 'Default' | 'Product' | 'Text / Artwork' | 'Photo';
 export interface UpscaleOptions {
   factor: UpscaleFactor;
   profile: UpscaleProfile;
@@ -204,14 +204,38 @@ export interface AdTemplate {
 // For Image Blender
 export interface BlendedImage {
     id: string;
+    name: string;
     image: HTMLImageElement;
     x: number;
     y: number;
-    width: number;
-    height: number;
+    scale: number;
+    rotation: number;
     opacity: number;
     zIndex: number;
+    width: number;
+    height: number;
 }
+export interface LayerMetadata {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    scale: number;
+    rotation: number;
+    z: number;
+    width: number;
+    height: number;
+}
+export interface ExportBundle {
+    compositePng: string;
+    guidePng: string;
+    objectsSheetPng: string;
+    metadata: {
+        canvas: { w: number, h: number };
+        layers: LayerMetadata[];
+    }
+}
+
 
 // For Prompts
 export interface Prompts {
@@ -228,9 +252,8 @@ export interface LibrarySelectionConfig {
 export type ModelType = 'text' | 'visual' | 'edit' | 'upscale';
 export type ModelConfig = Record<ModelType, string>;
 
-// FIX: Corrected HarmCategory to be compatible with the version of @google/genai being used. The compiler error suggested a different value was expected for HARM_CATEGORY_HARASSMENT.
-// FIX: Updated HarmCategory to use 'HARM_CATEGORY_IMAGE_HARASSMENT' as suggested by the compiler error to match the type expected by @google/genai.
-export type HarmCategory = 'HARM_CATEGORY_IMAGE_HARASSMENT' | 'HARM_CATEGORY_HATE_SPEECH' | 'HARM_CATEGORY_SEXUALLY_EXPLICIT' | 'HARM_CATEGORY_DANGEROUS_CONTENT';
+// FIX: Expanded HarmCategory to include all possible values from the genai SDK to ensure type compatibility.
+export type HarmCategory = 'HARM_CATEGORY_HARASSMENT' | 'HARM_CATEGORY_HATE_SPEECH' | 'HARM_CATEGORY_SEXUALLY_EXPLICIT' | 'HARM_CATEGORY_DANGEROUS_CONTENT' | 'HARM_CATEGORY_UNSPECIFIED' | 'HARM_CATEGORY_DEROGATORY' | 'HARM_CATEGORY_TOXICITY' | 'HARM_CATEGORY_VIOLENCE' | 'HARM_CATEGORY_SEXUAL' | 'HARM_CATEGORY_MEDICAL' | 'HARM_CATEGORY_DANGEROUS';
 export type HarmBlockThreshold = 'BLOCK_NONE' | 'BLOCK_ONLY_HIGH' | 'BLOCK_LOW_AND_ABOVE' | 'BLOCK_MEDIUM_AND_ABOVE';
 
 export interface SafetySetting {

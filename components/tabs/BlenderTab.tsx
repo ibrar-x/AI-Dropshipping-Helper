@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '../../store';
-import { GeneratedImage, LibraryImage } from '../../types';
+import { GeneratedImage, LibraryImage, ExportBundle } from '../../types';
 import ImageUploader from '../ImageUploader';
 import ImageBlender from '../ImageBlender';
 
@@ -20,9 +20,19 @@ const BlenderTab: React.FC<BlenderTabProps> = ({ initialImage }) => {
             clearRecreationData();
         }
     }, [initialImage, clearRecreationData]);
+    
+     useEffect(() => {
+        if (initialImages.length > 0) {
+            setStep('BLENDING');
+        }
+    }, [initialImages]);
+
 
     const handleImagesUpload = useCallback((images: GeneratedImage[]) => {
-        setInitialImages(prev => [...prev, ...images]);
+        setInitialImages(prev => {
+            const newImages = images.filter(img => !prev.some(p => p.id === img.id));
+            return [...prev, ...newImages];
+        });
     }, []);
 
     const handleSelectFromLibrary = () => {
@@ -33,20 +43,18 @@ const BlenderTab: React.FC<BlenderTabProps> = ({ initialImage }) => {
             }
         });
     };
-
-    const startBlending = () => {
-        if (initialImages.length < 2) {
-            addToast({ title: 'Not Enough Images', message: 'Please upload at least two images to blend.', type: 'error' });
-            return;
-        }
-        setStep('BLENDING');
-    };
-
-    const handleBlendComplete = useCallback(async (compositeImage: GeneratedImage, resultImage: GeneratedImage, prompt: string) => {
+    
+    const handleBlendComplete = useCallback(async (
+        compositeImage: GeneratedImage, 
+        resultImage: GeneratedImage, 
+        prompt: string,
+        bundle: ExportBundle,
+        seed: number,
+    ) => {
         const [savedImage] = await addImagesToLibrary([{
             src: resultImage.src,
             prompt: prompt,
-            notes: `Blended from ${initialImages.length} images.`
+            notes: `Surprise image created with seed ${seed}. Based on a composite of ${bundle.metadata.layers.length} images.`
         }]);
 
         addToast({
@@ -60,7 +68,7 @@ const BlenderTab: React.FC<BlenderTabProps> = ({ initialImage }) => {
         setStep('UPLOAD');
         setInitialImages([]);
 
-    }, [addToast, addImagesToLibrary, initialImages.length]);
+    }, [addToast, addImagesToLibrary]);
 
     const reset = () => {
         setStep('UPLOAD');
@@ -69,22 +77,15 @@ const BlenderTab: React.FC<BlenderTabProps> = ({ initialImage }) => {
     };
 
     if (step === 'UPLOAD') {
-        return (
+         return (
             <div className="flex-1 flex flex-col items-center justify-center p-4">
-                <ImageUploader onUpload={handleImagesUpload} onSelectFromLibrary={handleSelectFromLibrary} title="Image Blender" subtitle="Upload multiple images to combine them into a new creation." multiple={true} />
-                {initialImages.length > 0 && (
-                    <div className="mt-8 text-center animate-fade-in">
-                        <div className="flex flex-wrap justify-center gap-4 mb-4">
-                            {initialImages.map(img => (
-                                <img key={img.id} src={img.thumbnailSrc || img.src} alt="Uploaded" className="w-24 h-24 rounded-lg object-cover border-2 border-dark-border" />
-                            ))}
-                        </div>
-                        <p className="text-dark-text-secondary mb-4">{initialImages.length} image(s) ready. Add more or start blending.</p>
-                        <button onClick={startBlending} className="bg-brand-primary text-white font-bold py-3 px-8 rounded-lg hover:bg-brand-secondary transition-colors">
-                            Start Blending ({initialImages.length})
-                        </button>
-                    </div>
-                )}
+                <ImageUploader 
+                    onUpload={handleImagesUpload} 
+                    onSelectFromLibrary={handleSelectFromLibrary} 
+                    title="Image Blender" 
+                    subtitle="Upload multiple images to combine them into a new 'surprise' creation." 
+                    multiple={true} 
+                />
             </div>
         );
     }

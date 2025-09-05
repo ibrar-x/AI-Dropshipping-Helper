@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 // FIX: Correct import path for types.
 import { GenerationPayload, CreativeOptions, GeneratedImage, GenerationOptionsProps as BaseGenerationOptionsProps } from '../types';

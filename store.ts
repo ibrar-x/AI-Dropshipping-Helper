@@ -40,9 +40,7 @@ const loadSettings = (): { prompts: Prompts, modelConfig: ModelConfig, safetySet
                 prompts: mergedPrompts,
                 modelConfig: parsed.modelConfig || { text: 'gemini-2.5-flash', visual: 'imagen-4.0-generate-001', edit: 'gemini-2.5-flash-image-preview', upscale: 'imagen-v002-upscale' },
                 safetySettings: parsed.safetySettings || [
-                    // FIX: Corrected HarmCategory to be compatible with the version of @google/genai being used.
-                    // FIX: Updated HarmCategory from 'HARM_CATEGORY_HARASSMENT' to 'HARM_CATEGORY_IMAGE_HARASSMENT' to match the expected type in the @google/genai library.
-                    { category: 'HARM_CATEGORY_IMAGE_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                     { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
                     { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
                     { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
@@ -56,8 +54,7 @@ const loadSettings = (): { prompts: Prompts, modelConfig: ModelConfig, safetySet
         prompts: defaultPrompts,
         modelConfig: { text: 'gemini-2.5-flash', visual: 'imagen-4.0-generate-001', edit: 'gemini-2.5-flash-image-preview', upscale: 'imagen-v002-upscale' },
         safetySettings: [
-            // FIX: Updated HarmCategory from 'HARM_CATEGORY_HARASSMENT' to 'HARM_CATEGORY_IMAGE_HARASSMENT' to match the expected type in the @google/genai library.
-            { category: 'HARM_CATEGORY_IMAGE_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },

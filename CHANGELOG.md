@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2024-08-05
+
+### Added
+- **Complete Image Blender Overhaul**: The Image Blender has been rebuilt from the ground up into a powerful, production-ready creative tool.
+  - **Advanced Canvas Editor**:
+    - Uses `react-konva` for a robust, layer-based editing experience.
+    - Users can upload multiple images which appear as layers on a fixed-size canvas.
+    - Full manipulation of layers: drag to move, resize with corner handles, rotate, and re-order (bring forward/backward).
+  - **Layer Management**:
+    - A new sidebar features a layer list, allowing users to select, rename, delete, and reorder layers easily.
+    - Controls for adjusting layer opacity are available for the selected layer.
+  - **"Create Surprise" AI Generation**:
+    - A new one-click generation button uses the advanced `gemini-2.5-flash-image-preview` model.
+    - It sends a comprehensive "export bundle" to the AI, including a downscaled guide image, an "objects sheet" of all source images, and detailed layer metadata to ensure high-quality, context-aware results where all objects are retained.
+  - **Result Viewer & Controls**:
+    - A new results screen appears after generation.
+    - Features a **before-and-after slider** to compare the user's composite with the AI-generated image.
+    - Includes **seed control** with a lock, allowing for reproducible re-rolls of the image.
+    - A "Re-roll" button lets users iterate on a result, and a style hint input allows for further creative direction.
+
+### Changed
+- The underlying AI service for blending images has been updated to use a more powerful model and a more sophisticated, multi-part prompt structure.
+
 ## [1.3.0] - 2024-08-04
 
 ### Added

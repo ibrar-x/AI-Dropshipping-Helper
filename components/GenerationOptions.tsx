@@ -1,6 +1,6 @@
 
-
 import React, { useState, useEffect } from 'react';
+// FIX: Correct import path for types.
 import { GenerationPayload, CreativeOptions, GeneratedImage, GenerationOptionsProps as BaseGenerationOptionsProps } from '../types';
 import { PaperclipIcon } from './icons/PaperclipIcon';
 import { MegaphoneIcon } from './icons/MegaphoneIcon';
@@ -65,7 +65,7 @@ const OptionGroup: React.FC<OptionGroupProps> = ({ title, options, allowCustom, 
 };
 
 
-const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productDescription, creativeOptions, originalImage, onGenerate, productCategory, onStartAdCreation }) => {
+const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productDescription, creativeOptions, originalImage, onGenerate, onStartAdCreation }) => {
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [batchCount, setBatchCount] = useState('1');
@@ -75,7 +75,8 @@ const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productDescriptio
     if (creativeOptions && Object.keys(creativeOptions).length > 0) {
         setSelections(prev => {
             const initialSelections = { ...prev };
-            const categoriesToPreselect: (keyof CreativeOptions)[] = ['Style', 'Camera Angle', 'Lens & Focus'];
+            // FIX: Removed 'Camera Angle' and 'Lens & Focus' as they are not valid keys of CreativeOptions
+            const categoriesToPreselect: (keyof CreativeOptions)[] = ['Style'];
             
             categoriesToPreselect.forEach(category => {
                 // Only pre-select if the user hasn't already made a choice in this category
@@ -121,7 +122,7 @@ const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productDescriptio
           logoFile, 
           aspectRatio,
           productDescription,
-          originalImage,
+          originalImage: originalImage ?? undefined,
       });
   }
 

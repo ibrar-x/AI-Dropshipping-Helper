@@ -1,4 +1,6 @@
+
 import React, { useState } from 'react';
+// FIX: Correct import path for types.
 import { AdDirectorOptionsProps, AdGenerationPayload } from '../types';
 import { PaperclipIcon } from './icons/PaperclipIcon';
 

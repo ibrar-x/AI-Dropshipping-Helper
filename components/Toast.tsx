@@ -1,4 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
+// FIX: Correct import path for types.
 import { ToastInfo } from '../types';
 import { XIcon } from './icons/XIcon';
 

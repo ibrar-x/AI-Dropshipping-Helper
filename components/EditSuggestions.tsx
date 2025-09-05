@@ -1,4 +1,6 @@
+
 import React, { useState } from 'react';
+// FIX: Correct import path for types.
 import { GeneratedImage } from '../types';
 import { SendIcon } from './icons/SendIcon';
 

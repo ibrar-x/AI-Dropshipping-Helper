@@ -1,190 +1,134 @@
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { ToastInfo, Prompts, ToolTab, GeneratedImage } from './types';
-import { initializeAi, enhancePromptStream } from './services/geminiService';
+import React, { useEffect, useState } from 'react';
+// FIX: Correct import path for the Zustand store.
+import { useAppStore } from './store';
 import Sidebar from './components/Sidebar';
 import ToastContainer from './components/ToastContainer';
 import { MenuIcon } from './components/icons/MenuIcon';
+// FIX: Correct import path for SettingsModal component.
 import SettingsModal from './components/SettingsModal';
-import { encrypt, decrypt } from './utils/crypto';
-import { defaultPrompts } from './prompts';
+// FIX: Correct import path for geminiService.
 import AdGeneratorTab from './components/tabs/AdGeneratorTab';
 import EditorTab from './components/tabs/EditorTab';
 import UpscalerTab from './components/tabs/UpscalerTab';
 import LibraryTab from './components/tabs/LibraryTab';
 import BlenderTab from './components/tabs/BlenderTab';
+import VisualGeneratorTab from './components/tabs/VisualGeneratorTab';
+import ImageUpscaler from './components/ImageUpscaler';
+import UpscaleConfirmationModal from './components/UpscaleConfirmationModal';
+import LibrarySelectionModal from './components/LibrarySelectionModal';
+import { SharedImageData } from './types';
+import SharedImageViewer from './components/SharedImageViewer';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<ToolTab>('ads');
-  const [toasts, setToasts] = useState<ToastInfo[]>([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-  
-  // Settings State
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [prompts, setPrompts] = useState<Prompts>(defaultPrompts);
-  const [userApiKey, setUserApiKey] = useState('');
-  
-  // Global Asset Library
-  const [library, setLibrary] = useState<GeneratedImage[]>([]);
+  const {
+    activeTab,
+    isSettingsOpen,
+    recreationData,
+    initializeApp,
+    setSidebarOpen,
+    upscalingImage,
+    pendingUpscaledImage,
+    handleUpscaleSave,
+    closeUpscaler,
+    resolveUpscaledImage,
+  } = useAppStore();
 
-  // Cross-tool workflow state
-  const [recreationData, setRecreationData] = useState<{ tool: ToolTab, image: GeneratedImage } | null>(null);
+  const [sharedImage, setSharedImage] = useState<SharedImageData | null>(null);
 
-  const addToast = useCallback((toast: Omit<ToastInfo, 'id'>) => {
-    const newToast = { ...toast, id: Date.now() };
-    setToasts(prev => [...prev.filter(t => t.title !== toast.title), newToast]);
-  }, []);
-
-  // Load from local storage on initial render
   useEffect(() => {
-    try {
-      // API Key & Prompts
-      const storedKey = localStorage.getItem('userApiKey');
-      const decryptedKey = storedKey ? decrypt(storedKey) : '';
-      setUserApiKey(decryptedKey);
+    initializeApp();
+  }, [initializeApp]);
 
-      const storedPrompts = localStorage.getItem('userPrompts');
-      const parsedPrompts = storedPrompts ? { ...defaultPrompts, ...JSON.parse(storedPrompts) } : defaultPrompts;
-      setPrompts(parsedPrompts);
-
-      const keyToUse = decryptedKey || process.env.API_KEY;
-      if (keyToUse) {
-        initializeAi(keyToUse, parsedPrompts);
-      } else {
-        addToast({ title: 'API Key Missing', message: 'Please add your Google API key in the settings to use the app.', type: 'error' });
-      }
-      
-      // Library
-      const storedLibrary = localStorage.getItem('libraryImages');
-      if (storedLibrary) {
-          const parsedLibrary: GeneratedImage[] = JSON.parse(storedLibrary);
-          setLibrary(parsedLibrary);
-      }
-
-    } catch (error) {
-      console.error("Failed to initialize app state from localStorage", error);
-    }
-  }, [addToast]);
-
-  // Save library to local storage whenever it changes
   useEffect(() => {
-      if (library.length > 0) {
-          localStorage.setItem('libraryImages', JSON.stringify(library));
-      }
-  }, [library]);
-  
-  const removeToast = (id: number) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-  
-  const handleSelectTab = (tab: ToolTab) => {
-    setActiveTab(tab);
-    setIsSidebarOpen(false);
-  };
-  
-  const addImagesToLibrary = useCallback((images: GeneratedImage[]) => {
-    // Add to library, ensuring no duplicates from failed/re-generated items
-    setLibrary(prev => {
-        const existingIds = new Set(prev.map(img => img.id));
-        const newImages = images.filter(img => !existingIds.has(img.id));
-        return [...newImages, ...prev];
-    });
-  }, []);
-
-  const handleSaveSettings = ({ apiKey, newPrompts }: { apiKey: string; newPrompts: Prompts }) => {
-    setUserApiKey(apiKey);
-    localStorage.setItem('userApiKey', encrypt(apiKey));
-    const keyToUse = apiKey || process.env.API_KEY;
-    if (keyToUse) {
-        initializeAi(keyToUse, newPrompts);
-    } else {
-        initializeAi('');
-    }
-
-    setPrompts(newPrompts);
-    localStorage.setItem('userPrompts', JSON.stringify(newPrompts));
-    
-    addToast({ title: 'Settings Saved', message: 'Your new settings have been applied.', type: 'success' });
-  };
-
-  const handleClearData = () => {
-    if (window.confirm('Are you sure you want to clear all settings and library images? This action cannot be undone.')) {
-        localStorage.removeItem('userApiKey');
-        localStorage.removeItem('userPrompts');
-        localStorage.removeItem('libraryImages');
-        setPrompts(defaultPrompts);
-        setUserApiKey('');
-        setLibrary([]);
-
-        const keyToUse = process.env.API_KEY;
-        if (keyToUse) {
-            initializeAi(keyToUse, defaultPrompts);
+    const handleHashChange = () => {
+        const hash = window.location.hash;
+        if (hash.startsWith('#share=')) {
+            try {
+                const base64Data = hash.substring('#share='.length);
+                const jsonString = atob(base64Data);
+                const parsedData = JSON.parse(jsonString) as SharedImageData;
+                // Basic validation
+                if (parsedData.src && parsedData.width && parsedData.height) {
+                    setSharedImage(parsedData);
+                }
+            } catch (error) {
+                console.error("Failed to parse share data from URL hash:", error);
+                window.location.hash = '';
+            }
         }
-        addToast({ title: 'Data Cleared', message: 'All local data has been removed.', type: 'info' });
-        setIsSettingsOpen(false);
+    };
+    
+    handleHashChange(); // Check on initial load
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+        window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  const closeSharedImageViewer = () => {
+    setSharedImage(null);
+    if (window.history.pushState) {
+        window.history.pushState("", document.title, window.location.pathname + window.location.search);
+    } else {
+        window.location.hash = '';
     }
-  };
-
-  const handleUseAsInput = useCallback((tool: ToolTab, image: GeneratedImage) => {
-    setRecreationData({ tool, image });
-    setActiveTab(tool);
-  }, []);
-
-
-  const clearRecreationData = useCallback(() => {
-      setRecreationData(null);
-  }, []);
-
+  }
 
   return (
     <>
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <ToastContainer />
+      <LibrarySelectionModal />
       <div className="min-h-screen bg-dark-bg text-dark-text-primary font-sans flex h-screen w-full overflow-hidden">
-        <Sidebar 
-            activeTab={activeTab}
-            onSelectTab={handleSelectTab}
-            isOpen={isSidebarOpen}
-            setIsOpen={setIsSidebarOpen}
-            isCollapsed={isSidebarCollapsed}
-            setIsCollapsed={setIsSidebarCollapsed}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-        />
+        <Sidebar />
         <div className="flex flex-col flex-1 h-screen relative">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden absolute top-4 left-4 z-20 p-2 bg-dark-surface/80 rounded-md">
+            <button onClick={() => setSidebarOpen(true)} className="md:hidden absolute top-4 left-4 z-20 p-2 bg-dark-surface/80 rounded-md">
                 <MenuIcon className="w-6 h-6" />
             </button>
             <main className="flex-1 flex flex-col overflow-y-auto">
               <div className="w-full h-full">
                 <div hidden={activeTab !== 'ads'} className="w-full h-full">
-                  <AdGeneratorTab addToast={addToast} addImagesToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'ads' ? recreationData.image : undefined} onDone={clearRecreationData} onUseAsInput={handleUseAsInput} />
+                  <AdGeneratorTab initialImage={recreationData?.tool === 'ads' ? recreationData.image : undefined} />
                 </div>
                 <div hidden={activeTab !== 'editor'} className="w-full h-full">
-                  <EditorTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'editor' ? recreationData.image : undefined} onDone={clearRecreationData} />
+                  <EditorTab initialImage={recreationData?.tool === 'editor' ? recreationData.image : undefined} />
                 </div>
                 <div hidden={activeTab !== 'upscaler'} className="w-full h-full">
-                  <UpscalerTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'upscaler' ? recreationData.image : undefined} onDone={clearRecreationData} />
+                  <UpscalerTab initialImage={recreationData?.tool === 'upscaler' ? recreationData.image : undefined} />
                 </div>
                 <div hidden={activeTab !== 'blender'} className="w-full h-full">
-                  <BlenderTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'blender' ? recreationData.image : undefined} onDone={clearRecreationData} />
+                  <BlenderTab initialImage={recreationData?.tool === 'blender' ? recreationData.image : undefined} />
+                </div>
+                 <div hidden={activeTab !== 'visuals'} className="w-full h-full">
+                  <VisualGeneratorTab />
                 </div>
                 <div hidden={activeTab !== 'library'} className="w-full h-full">
-                  <LibraryTab library={library} onUseAsInput={handleUseAsInput} />
+                  <LibraryTab />
                 </div>
               </div>
             </main>
         </div>
       </div>
       {isSettingsOpen && (
-        <SettingsModal
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
-            currentApiKey={userApiKey}
-            currentPrompts={prompts}
-            onSave={handleSaveSettings}
-            onClearData={handleClearData}
-            onEnhancePrompt={enhancePromptStream}
+// FIX: The onEnhancePrompt prop does not exist on the SettingsModal component.
+        <SettingsModal />
+      )}
+      {upscalingImage && !pendingUpscaledImage && (
+        <ImageUpscaler
+            image={upscalingImage}
+            onSave={handleUpscaleSave}
+            onCancel={closeUpscaler}
         />
+      )}
+      {pendingUpscaledImage && (
+        <UpscaleConfirmationModal
+            onConfirm={resolveUpscaledImage}
+            onCancel={closeUpscaler}
+        />
+      )}
+      {sharedImage && (
+          <SharedImageViewer imageData={sharedImage} onClose={closeSharedImageViewer} />
       )}
     </>
   );

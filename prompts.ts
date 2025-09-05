@@ -1,3 +1,4 @@
+// FIX: Correct import path for types.
 import { Prompts } from './types';
 
 export const defaultPrompts: Prompts = {
@@ -93,9 +94,14 @@ You must generate the following sections, each enclosed in a <details> tag with 
 
 Use only the following HTML tags: <details>, <summary>, <h3>, <p>, <ul>, <li>. Do not use any markdown, styles, or other HTML tags. Ensure the output is well-structured and easy to read.`,
 
-  suggestVisualPrompts: `You are a world-class creative director for e-commerce brands. The user has provided an image of their product with a transparent background.
-Your task is to generate 4 distinct, creative, and compelling text-to-image prompt ideas for a lifestyle or ad photoshoot featuring this product.
-The prompts should be diverse, covering different styles (e.g., minimalist, rustic, modern, vibrant).
+  suggestVisualPrompts: `You are a world-class creative director for e-commerce brands. The user has provided a reference image of their product. Your task is to generate 4 distinct, creative, and compelling text-to-image prompts for a **background scene or lifestyle setting** that would complement this product.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Focus on the Scene**: Your prompts MUST describe the environment, lighting, mood, and composition of the background.
+2.  **Do Not Describe the Product**: Do NOT mention the product itself in the prompts. The user will composite the provided product image into the scene you describe.
+3.  **Blend Instructions**: The prompts should imply that the product will be blended in. For example, instead of "A photo of headphones on a desk", write "A clean, modern wooden desk next to a sleek laptop, a notebook, and a cup of coffee, with space for a product to be placed."
+4.  **Style Reference**: If a second image is provided, use it as a style reference for the mood, color palette, and lighting of the scenes you describe.
+
 Your entire response MUST be a single, valid JSON object with a single key "suggestions", which is an array of 4 strings.
 Example:
 {

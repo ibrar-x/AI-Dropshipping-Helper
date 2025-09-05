@@ -1,67 +1,93 @@
 import React, { useState, useEffect } from 'react';
-import { AdBrief, ToastInfo } from '../types';
+import { AdBrief } from '../types';
 import { MagicWandIcon } from './icons/MagicWandIcon';
+import MarkdownContent from './MarkdownContent';
 
 interface PlatformContentGeneratorProps {
-    platform: string;
-    // FIX: Add brief prop to fix type error in AdGeneratorTab.tsx.
-    brief: AdBrief;
-    addToast: (toast: Omit<ToastInfo, 'id'>) => void;
-    generatedContent: string;
-    isLoading: boolean;
-    onGenerate: (prompt: string) => Promise<void>;
+  platform: string;
+  brief: AdBrief;
+  generatedContent: string;
+  isLoading: boolean;
+  onGenerate: (prompt: string) => void;
 }
 
-const PlatformContentGenerator: React.FC<PlatformContentGeneratorProps> = ({ platform, brief, addToast, generatedContent, isLoading, onGenerate }) => {
-    const [prompt, setPrompt] = useState('');
+const PlatformContentGenerator: React.FC<PlatformContentGeneratorProps> = ({
+  platform,
+  brief,
+  generatedContent,
+  isLoading,
+  onGenerate,
+}) => {
+  const [userRequest, setUserRequest] = useState('');
 
-    // FIX: Use useEffect to set a context-aware prompt when props change.
-    useEffect(() => {
-        setPrompt(`Generate an SEO-optimized title and a compelling product description for "${brief.product.name || 'this product'}" on ${platform}.`);
-    }, [platform, brief.product.name]);
+  useEffect(() => {
+    // Auto-generate a sensible default prompt when the platform or product name changes.
+    const productName = brief.product.name || 'the product';
+    let defaultPrompt = '';
+    switch (platform.toLowerCase()) {
+        case 'shopify':
+            defaultPrompt = `Write a compelling SEO-optimized product description for ${productName}. Focus on its key benefits and unique selling points.`;
+            break;
+        case 'etsy':
+            defaultPrompt = `Create a friendly and descriptive Etsy listing for ${productName}, highlighting its handmade qualities and story.`;
+            break;
+        case 'ebay':
+            defaultPrompt = `Generate a keyword-rich title and a detailed item description for an eBay listing of ${productName}.`;
+            break;
+        case 'instagram post':
+             defaultPrompt = `Write a catchy Instagram caption for a post featuring ${productName}. Include relevant hashtags.`;
+             break;
+        default:
+            defaultPrompt = `Write a short, engaging marketing copy for ${productName} for the ${platform} platform.`;
+    }
+    setUserRequest(defaultPrompt);
+  }, [platform, brief.product.name]);
 
-    const handleGenerate = () => {
-        onGenerate(prompt);
-    };
+  const handleGenerateClick = () => {
+    if (userRequest.trim()) {
+      onGenerate(userRequest);
+    }
+  };
 
-    return (
-        <div className="space-y-4">
-            <h3 className="text-xl font-bold text-white">Content Generation for {platform}</h3>
-            <p className="text-sm text-dark-text-secondary">
-                Generate SEO titles, descriptions, and more, tailored for your selected platform.
-            </p>
-            <div className="space-y-2">
-                <label htmlFor="platform-prompt" className="text-sm font-semibold text-dark-text-secondary">Your Request</label>
-                <textarea
-                    id="platform-prompt"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    rows={3}
-                    disabled={isLoading}
-                    className="w-full text-sm rounded-lg border-dark-border bg-dark-input shadow-sm px-3 py-2 resize-y disabled:opacity-60"
-                    placeholder={`e.g., "Generate 5 SEO keywords for ${platform}"`}
-                />
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-semibold text-dark-text-secondary mb-2">
+          What content do you need for {platform}?
+        </label>
+        <textarea
+          value={userRequest}
+          onChange={(e) => setUserRequest(e.target.value)}
+          rows={3}
+          className="w-full text-sm rounded-lg border-dark-border bg-dark-input shadow-sm focus:border-brand-primary focus:ring-brand-primary px-3 py-2 resize-y"
+          placeholder={`e.g., "Write a product description for ${brief.product.name || 'the product'}"`}
+        />
+      </div>
+      <button
+        onClick={handleGenerateClick}
+        disabled={isLoading || !userRequest.trim()}
+        className="w-full flex items-center justify-center gap-2 bg-brand-secondary text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+      >
+        <MagicWandIcon className={`w-5 h-5 ${isLoading ? 'animate-pulse' : ''}`} />
+        {isLoading ? 'Generating...' : 'Generate Content'}
+      </button>
+
+      {(isLoading || generatedContent) && (
+        <div className="pt-4 border-t border-dark-border/50">
+           {isLoading && !generatedContent ? (
+             <div className="flex items-center justify-center p-4">
+                <div className="w-5 h-5 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+                <p className="ml-3 text-sm font-semibold text-dark-text-secondary">Generating content...</p>
             </div>
-            <button
-                onClick={handleGenerate}
-                disabled={isLoading || !prompt.trim()}
-                className="w-full flex items-center justify-center gap-2 bg-brand-secondary text-white font-bold py-2.5 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-            >
-                <MagicWandIcon className={`w-5 h-5 ${isLoading ? 'animate-pulse' : ''}`} />
-                {isLoading ? 'Generating...' : 'Generate Content'}
-            </button>
-
-            {isLoading && !generatedContent && <p className="text-dark-text-secondary text-sm animate-pulse">Generating...</p>}
-
-            {generatedContent && (
-                <div className="bg-dark-surface rounded-lg border border-dark-border mt-4">
-                     <div className="prose prose-sm prose-invert p-4 text-dark-text-secondary max-w-none 
-                               [&>h3]:font-semibold [&>h3]:text-dark-text-primary [&>ul]:list-disc [&>ul]:pl-5 [&>p]:my-2"
-                        dangerouslySetInnerHTML={{ __html: generatedContent.replace(/\n/g, '<br />') }} />
-                </div>
-            )}
+           ) : (
+            <div className="prose prose-sm prose-invert p-3 bg-dark-surface rounded-md border border-dark-border/50 max-w-none text-dark-text-secondary">
+                 <MarkdownContent text={generatedContent} />
+            </div>
+           )}
         </div>
-    );
+      )}
+    </div>
+  );
 };
 
 export default PlatformContentGenerator;

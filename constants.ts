@@ -1,4 +1,5 @@
 
+// FIX: Correct import path for types.
 import { ProductCategory } from './types';
 
 export const LIFESTYLE_PROMPTS: Record<ProductCategory, string[]> = {

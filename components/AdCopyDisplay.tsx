@@ -78,21 +78,21 @@ const AdCopyDisplay: React.FC<AdCopyDisplayProps> = ({ htmlContent, isLoading })
     }
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-3">
             {parsedData.map((section, index) => (
-                <details key={index} className="bg-dark-input rounded-lg border border-dark-border" open={index === 0}>
-                    <summary className="cursor-pointer flex justify-between items-center p-3 font-semibold text-dark-text-primary">
+                <details key={index} className="bg-dark-input/50 rounded-lg border border-dark-border" open={index === 0}>
+                    <summary className="cursor-pointer flex justify-between items-center p-4 font-bold text-lg text-dark-text-primary">
                         {section.title}
                         <ChevronDownIcon className="w-5 h-5 transition-transform group-open:rotate-180" />
                     </summary>
-                    <div className="p-3 border-t border-dark-border space-y-4">
+                    <div className="p-4 border-t border-dark-border space-y-4">
                         {Object.entries(section.content).map(([subheading, items]) => (
-                            <div key={subheading}>
-                                <h4 className="font-semibold text-dark-text-secondary mb-2 border-b border-dark-border pb-1">{subheading}</h4>
+                             <div key={subheading} className="bg-dark-surface p-3 rounded-lg border border-dark-border/50">
+                                <h4 className="font-semibold text-dark-text-primary mb-3">{subheading}</h4>
                                 <div className="space-y-2">
                                     {items.map((item, itemIndex) => (
-                                        <div key={itemIndex} className="flex items-start justify-between gap-2 p-2 bg-dark-surface rounded-md text-sm">
-                                            <p className="flex-1">{item}</p>
+                                        <div key={itemIndex} className="flex items-start justify-between gap-3 p-3 bg-dark-input rounded-md text-sm">
+                                            <p className="flex-1 whitespace-pre-wrap text-dark-text-secondary">{item}</p>
                                             <CopyButton textToCopy={item} />
                                         </div>
                                     ))}

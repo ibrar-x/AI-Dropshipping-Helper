@@ -1,13 +1,13 @@
+
 import React from 'react';
-import { ToastInfo } from '../types';
+// FIX: Correct import path for the Zustand store.
+import { useAppStore } from '../store';
 import Toast from './Toast';
 
-interface ToastContainerProps {
-  toasts: ToastInfo[];
-  onRemove: (id: number) => void;
-}
-
-const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove }) => {
+const ToastContainer: React.FC = () => {
+  const toasts = useAppStore(state => state.toasts);
+  const onRemove = useAppStore(state => state.removeToast);
+  
   return (
     <div
       aria-live="assertive"

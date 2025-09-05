@@ -1,20 +1,18 @@
-
-
-// FIX: Import `useRef` to resolve "Cannot find name 'useRef'" error.
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { GeneratedImage, ToastInfo } from '../../types';
+// FIX: Correct import path for the Zustand store.
+import { useAppStore } from '../../store';
+// FIX: Correct import path for types.
+import { GeneratedImage, LibraryImage } from '../../types';
 import { createThumbnail } from '../../utils/imageUtils';
 import ImageUploader from '../ImageUploader';
 import ImageEditor from '../ImageEditor';
 
 interface EditorTabProps {
-  addToast: (toast: Omit<ToastInfo, 'id'>) => void;
-  addImageToLibrary: (images: GeneratedImage[]) => void;
-  initialImage?: GeneratedImage;
-  onDone?: () => void;
+  initialImage?: LibraryImage;
 }
 
-const EditorTab: React.FC<EditorTabProps> = ({ addToast, addImageToLibrary, initialImage, onDone }) => {
+const EditorTab: React.FC<EditorTabProps> = ({ initialImage }) => {
+  const { addToast, addImagesToLibrary, clearRecreationData, openLibrarySelector } = useAppStore();
   const [editingImage, setEditingImage] = useState<GeneratedImage | null>(initialImage || null);
   const sourceImageRef = useRef<GeneratedImage | null>(initialImage || null);
 
@@ -22,40 +20,50 @@ const EditorTab: React.FC<EditorTabProps> = ({ addToast, addImageToLibrary, init
     if (initialImage) {
         setEditingImage(initialImage);
         sourceImageRef.current = initialImage;
-        onDone?.();
+        clearRecreationData();
     }
-  }, [initialImage, onDone]);
+  }, [initialImage, clearRecreationData]);
   
-  const handleImageUpload = (image: GeneratedImage) => {
-      setEditingImage(image);
-      sourceImageRef.current = image;
+  const handleImageUpload = (images: GeneratedImage[]) => {
+      const image = images[0];
+      if (image) {
+        setEditingImage(image);
+        sourceImageRef.current = image;
+      }
+  };
+
+  const handleSelectFromLibrary = () => {
+    openLibrarySelector({
+        multiple: false,
+        onSelect: (images) => {
+            // handleImageUpload takes GeneratedImage[]
+            handleImageUpload(images);
+        }
+    });
   };
 
   const handleFinalImageSave = useCallback(async (finalImageDataUrl: string) => {
-    const originalImage = sourceImageRef.current;
-    if (!originalImage) return;
-
-    setEditingImage(null);
-    const thumbnailSrc = await createThumbnail(finalImageDataUrl, 256, 256);
+    const originalId = sourceImageRef.current?.id;
     
-    const savedImage: GeneratedImage = {
-        id: `edited_${Date.now()}`,
+    const [savedImage] = await addImagesToLibrary([{
         src: finalImageDataUrl,
-        thumbnailSrc: thumbnailSrc,
-    };
-
-    addImageToLibrary([savedImage]);
+        originalId: originalId,
+        notes: `Edited from ${originalId}`,
+    }]);
 
     addToast({
         title: 'Image Saved to Library',
-        message: 'Your edited image has been saved to the library.',
+        message: 'Your edited image has been saved.',
         type: 'success',
-        imageSrc: thumbnailSrc
+        imageSrc: savedImage.thumbnailSrc
     });
-  }, [addToast, addImageToLibrary]);
+    
+    setEditingImage(null);
+    sourceImageRef.current = null;
+  }, [addToast, addImagesToLibrary]);
 
   if (!editingImage) {
-    return <ImageUploader onUpload={(images) => handleImageUpload(images[0])} title="Image Editor" subtitle="Upload an image to start making advanced edits." multiple={false} />;
+    return <ImageUploader onUpload={handleImageUpload} onSelectFromLibrary={handleSelectFromLibrary} title="Image Editor" subtitle="Upload an image to start making advanced edits." multiple={false} />;
   }
   
   return (

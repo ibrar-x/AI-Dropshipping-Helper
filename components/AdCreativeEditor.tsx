@@ -1,9 +1,6 @@
 
-
-
-
-
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+// FIX: Correct import path for types.
 import { AdCreativeState, GeneratedImage } from '../types';
 import { adTemplates } from '../adTemplates';
 
@@ -55,7 +52,7 @@ const AdCreativeEditor: React.FC<AdCreativeEditorProps> = ({
         const elementKey = key as NonNullable<DraggableElement>;
         if (isPointInRect(coords, elementRectsRef.current[elementKey])) {
             // Check visibility based on state
-            if ((elementKey === 'logo' && creativeState.showLogo) ||
+            if ((elementKey === 'logo' && creativeState.showLogo && logoImage) ||
                 (elementKey === 'headline' && creativeState.showHeadline) ||
                 (elementKey === 'cta' && creativeState.showCta)) {
                 setDraggingElement(elementKey);
@@ -89,7 +86,7 @@ const AdCreativeEditor: React.FC<AdCreativeEditorProps> = ({
       for (const key in elementRectsRef.current) {
         const elementKey = key as NonNullable<DraggableElement>;
         if (isPointInRect(coords, elementRectsRef.current[elementKey])) {
-            if ((elementKey === 'logo' && creativeState.showLogo) ||
+            if ((elementKey === 'logo' && creativeState.showLogo && logoImage) ||
                 (elementKey === 'headline' && creativeState.showHeadline) ||
                 (elementKey === 'cta' && creativeState.showCta)) {
                 cursor = 'grab';
@@ -134,6 +131,7 @@ const AdCreativeEditor: React.FC<AdCreativeEditorProps> = ({
         handleDraw();
     } else {
         bgImg.onload = handleDraw;
+        bgImg.onerror = () => console.error("Failed to load background image for canvas.");
     }
   }, [backgroundImage, logoImage, creativeState]);
   

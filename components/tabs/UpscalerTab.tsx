@@ -1,60 +1,50 @@
 
-
-import React, { useState, useCallback, useEffect } from 'react';
-import { GeneratedImage, ToastInfo } from '../../types';
-import { createThumbnail } from '../../utils/imageUtils';
+import React, { useEffect } from 'react';
+// FIX: Correct import path for the Zustand store.
+import { useAppStore } from '../../store';
+// FIX: Correct import path for types.
+import { GeneratedImage } from '../../types';
 import ImageUploader from '../ImageUploader';
-import ImageUpscaler from '../ImageUpscaler';
 
 interface UpscalerTabProps {
-  addToast: (toast: Omit<ToastInfo, 'id'>) => void;
-  addImageToLibrary: (images: GeneratedImage[]) => void;
   initialImage?: GeneratedImage;
-  onDone?: () => void;
 }
 
-const UpscalerTab: React.FC<UpscalerTabProps> = ({ addToast, addImageToLibrary, initialImage, onDone }) => {
-  const [upscalingImage, setUpscalingImage] = useState<GeneratedImage | null>(initialImage || null);
+const UpscalerTab: React.FC<UpscalerTabProps> = ({ initialImage }) => {
+  const { openUpscaler, clearRecreationData, openLibrarySelector } = useAppStore();
 
   useEffect(() => {
     if (initialImage) {
-      setUpscalingImage(initialImage);
-      onDone?.();
+      openUpscaler(initialImage);
+      clearRecreationData();
     }
-  }, [initialImage, onDone]);
+  }, [initialImage, openUpscaler, clearRecreationData]);
+  
+  const handleUpload = (images: GeneratedImage[]) => {
+    if (images[0]) {
+      openUpscaler(images[0]);
+    }
+  };
 
-  const handleFinalUpscaleSave = useCallback(async (finalImageDataUrl: string, sourceImageId: string) => {
-    if (!upscalingImage) return;
-    
-    setUpscalingImage(null);
-    const thumbnailSrc = await createThumbnail(finalImageDataUrl, 256, 256);
-
-    const upscaledImage: GeneratedImage = {
-        id: `upscaled_${Date.now()}`,
-        src: finalImageDataUrl,
-        thumbnailSrc: thumbnailSrc,
-    };
-    
-    addImageToLibrary([upscaledImage]);
-
-    addToast({
-        title: 'Image Upscaled & Saved',
-        message: 'Your high-resolution image has been saved to the library.',
-        type: 'success',
-        imageSrc: thumbnailSrc
+  const handleSelectFromLibrary = () => {
+    openLibrarySelector({
+      multiple: false,
+      onSelect: (images) => {
+        if(images[0]) {
+          openUpscaler(images[0]);
+        }
+      }
     });
-  }, [addToast, addImageToLibrary, upscalingImage]);
-
-  if (!upscalingImage) {
-    return <ImageUploader onUpload={(images) => setUpscalingImage(images[0])} title="Image Upscaler" subtitle="Upload a low-resolution image to enhance its quality." multiple={false} />;
   }
 
   return (
-    <ImageUpscaler
-      image={upscalingImage}
-      onSave={handleFinalUpscaleSave}
-      onCancel={() => setUpscalingImage(null)}
-    />
+      <ImageUploader 
+        onUpload={handleUpload} 
+        onSelectFromLibrary={handleSelectFromLibrary}
+        title="Image Upscaler" 
+        subtitle="Upload a low-resolution image to enhance its quality and details." 
+        multiple={false} 
+      />
   );
 };
 

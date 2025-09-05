@@ -1,8 +1,12 @@
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { GeneratedImage, EditLayer, EditType, SelectionAnalysis } from '../types';
+// FIX: Correct import path for types.
+import { GeneratedImage, EditLayer, SelectionAnalysis } from '../types';
+// FIX: Correct import path for geminiService.
 import { analyzeSelection, editImageWithMask } from '../services/geminiService';
 import { createHighlightImage } from '../utils/imageUtils';
+// FIX: Correct import path for the Zustand store.
+import { useAppStore } from '../store';
 import { BrushIcon } from './icons/BrushIcon';
 import { LassoIcon } from './icons/LassoIcon';
 import { RectIcon } from './icons/RectIcon';
@@ -15,7 +19,7 @@ import { XIcon } from './icons/XIcon';
 import { SliderIcon } from './icons/SliderIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { PlusIcon } from './icons/PlusIcon';
-import { PaperclipIcon } from './icons/PaperclipIcon';
+import { PhotoIcon } from './icons/PhotoIcon';
 
 interface ImageEditorProps {
   image: GeneratedImage;
@@ -58,6 +62,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ image, onSave, onCancel }) =>
   const [isLayersOpen, setIsLayersOpen] = useState(false);
 
   const scaleRef = useRef(1);
+  const openLibrarySelector = useAppStore(state => state.openLibrarySelector);
 
   const referenceImageUrls = useMemo(() => referenceImages.map(file => URL.createObjectURL(file)), [referenceImages]);
 
@@ -478,6 +483,20 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ image, onSave, onCancel }) =>
     setReferenceImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleSelectFromLibrary = () => {
+    openLibrarySelector({
+      multiple: true,
+      onSelect: async (selectedImages) => {
+        const files = await Promise.all(selectedImages.map(async (img) => {
+            const res = await fetch(img.src);
+            const blob = await res.blob();
+            return new File([blob], `library_ref_${img.id}.png`, { type: blob.type });
+        }));
+        setReferenceImages(prev => [...prev, ...files]);
+      }
+    });
+  };
+
 
   const quickEditSuggestions = ['Remove this', 'Make it brighter', 'Change the color to blue'];
 
@@ -579,7 +598,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ image, onSave, onCancel }) =>
                         
                         <div className="pt-1">
                             <label className="text-sm font-medium text-dark-text-secondary block mb-2">Reference Images (Optional)</label>
-                            <div className="flex flex-wrap gap-2 items-center">
+                             <div className="flex flex-wrap gap-2 items-center">
                                 {referenceImageUrls.map((url, index) => (
                                     <div key={index} className="relative group">
                                         <img src={url} alt={referenceImages[index].name} className="w-12 h-12 rounded-md object-cover border border-dark-border"/>
@@ -588,10 +607,15 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ image, onSave, onCancel }) =>
                                         </button>
                                     </div>
                                 ))}
-                                <label htmlFor="reference-upload" className="w-12 h-12 flex items-center justify-center bg-dark-input border-2 border-dashed border-dark-border rounded-md cursor-pointer hover:border-brand-primary transition-colors">
-                                    <PlusIcon className="w-6 h-6 text-dark-text-secondary" />
-                                </label>
-                                <input id="reference-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleReferenceImageChange} />
+                                <div className="flex flex-col gap-2">
+                                     <label htmlFor="reference-upload" className="w-12 h-12 flex items-center justify-center bg-dark-input border-2 border-dashed border-dark-border rounded-md cursor-pointer hover:border-brand-primary transition-colors" title="Upload from device">
+                                        <PlusIcon className="w-6 h-6 text-dark-text-secondary" />
+                                    </label>
+                                    <input id="reference-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleReferenceImageChange} />
+                                </div>
+                                <button onClick={handleSelectFromLibrary} className="w-12 h-12 flex items-center justify-center bg-dark-input border-2 border-dashed border-dark-border rounded-md cursor-pointer hover:border-brand-primary transition-colors" title="Select from Library">
+                                    <PhotoIcon className="w-6 h-6 text-dark-text-secondary" />
+                                </button>
                             </div>
                         </div>
 

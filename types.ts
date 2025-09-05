@@ -1,12 +1,30 @@
+// types.ts
 
-
-export enum AppState {
-  IDLE = 'IDLE',
-  GENERATING = 'GENERATING',
-  RESULTS = 'RESULTS',
+export interface GeneratedImage {
+  id: string;
+  src: string;
+  thumbnailSrc?: string;
+  isLoading?: boolean;
 }
 
-export type ToolTab = 'upscaler' | 'editor' | 'ads' | 'library' | 'blender';
+export interface LibraryImage extends GeneratedImage {
+  createdAt: number;
+  prompt?: string;
+  notes?: string;
+  tags?: string[];
+  isFavorite?: boolean;
+  folderId?: string | null;
+  originalId?: string;
+  width: number;
+  height: number;
+}
+
+export interface Folder {
+    id: string;
+    name: string;
+    createdAt: number;
+}
+
 
 export enum ProductCategory {
   CLOTHING = 'Clothing',
@@ -14,56 +32,77 @@ export enum ProductCategory {
   GADGETS = 'Gadgets',
 }
 
-export interface GeneratedImage {
-  id: string;
-  src: string;
-  thumbnailSrc?: string;
-  isReference?: boolean;
-  isLoading?: boolean;
-}
-
-export interface AdDirectorOptionsProps {
-  sourceImage: GeneratedImage;
-}
-
-export interface BlendedImage {
-  id: string;
-  image: HTMLImageElement;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  opacity: number;
-  zIndex: number;
-}
-
-export interface DetectionResult {
-  category: ProductCategory;
-  description: string;
-}
-
 export interface CreativeOptions {
-  [key: string]: string[];
-}
-
-// FIX: Added GenerationOptionsProps for use in GenerationOptions component
-export interface GenerationOptionsProps {
-  productDescription: string;
-  creativeOptions: CreativeOptions | null;
-  originalImage: GeneratedImage | null;
-  productCategory: ProductCategory | null;
+  Style: string[];
+  Setting: string[];
+  Vibe: string[];
+  Props: string[];
 }
 
 export interface GenerationPayload {
   prompt: string;
   count: number;
-  logoFile?: File | null;
-  aspectRatio?: string;
-  productDescription: string;
+  logoFile: File | null;
+  aspectRatio: string;
+  productDescription?: string;
   originalImage?: GeneratedImage;
 }
 
-// FIX: Added AdGenerationPayload for use in AdDirectorOptions component
+export interface BaseGenerationOptionsProps {
+    productDescription: string;
+    productCategory: ProductCategory;
+    creativeOptions: CreativeOptions;
+    originalImage: GeneratedImage | null;
+}
+
+export interface GenerationOptionsProps extends BaseGenerationOptionsProps {
+    onGenerate: (payload: GenerationPayload) => void;
+    onStartAdCreation: (image: GeneratedImage) => void;
+}
+
+export type ToolTab = 'library' | 'ads' | 'visuals' | 'editor' | 'upscaler' | 'blender';
+
+export interface ToastInfo {
+  id: number;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'error';
+  imageSrc?: string;
+}
+
+// For Image Editor
+export type EditType = 'inpaint' | 'outpaint' | 'remove_bg';
+export interface EditLayer {
+    id: string;
+    imageDataUrl: string;
+    maskUrl?: string;
+    prompt: string;
+    editType: EditType | 'inpaint'; // 'inpaint' is a fallback
+    featherPx: number;
+    isVisible: boolean;
+    opacity: number;
+    createdAt: number;
+}
+export interface SelectionAnalysis {
+  selection_summary: string;
+  suggested_actions: string[];
+}
+
+// For Image Upscaler
+export type UpscaleFactor = 2 | 4 | 8;
+export type UpscaleProfile = 'Default' | 'Photo' | 'Product' | 'Text / Artwork';
+export interface UpscaleOptions {
+  factor: UpscaleFactor;
+  profile: UpscaleProfile;
+  removeArtifacts: boolean;
+  preserveFaces: boolean;
+  enhanceDetails: boolean;
+}
+
+// For Ad Director
+export interface AdDirectorOptionsProps {
+  sourceImage: GeneratedImage;
+}
 export interface AdGenerationPayload {
   sourceImage: GeneratedImage;
   platform: string;
@@ -73,30 +112,7 @@ export interface AdGenerationPayload {
   logoFile: File | null;
 }
 
-export interface GenerationContext {
-  payload: GenerationPayload;
-  file: File;
-}
-
-export type EditType = 'inpaint' | 'recolor' | 'replace' | 'relight' | 'add_object' | 'remove';
-
-export interface SelectionAnalysis {
-  selection_summary: string;
-  suggested_actions: string[];
-}
-
-export interface EditLayer {
-  id: string;
-  imageDataUrl: string;
-  maskUrl: string;
-  prompt: string;
-  editType: EditType;
-  featherPx: number;
-  isVisible: boolean;
-  opacity: number;
-  createdAt: number;
-}
-
+// For Ad Brief
 export interface AdBrief {
   platforms: string[];
   campaignGoal: string;
@@ -138,54 +154,14 @@ export interface AdBrief {
   };
 }
 
-// FIX: Added AdBriefWizardState for use in AdBriefWizard component
 export interface AdBriefWizardState {
-  brief: AdBrief;
   sourceImage: GeneratedImage;
+  brief: AdBrief;
+  validationErrors: string[];
   isLoading: boolean;
-  validationErrors?: string[];
 }
 
-export type UpscaleFactor = 2 | 4 | 8;
-export type UpscaleProfile = 'Default' | 'Photo' | 'Product' | 'Text / Artwork';
-
-export interface UpscaleOptions {
-  factor: UpscaleFactor;
-  profile: UpscaleProfile;
-  removeArtifacts: boolean;
-  preserveFaces: boolean;
-  enhanceDetails: boolean;
-}
-
-export interface ToastInfo {
-  id: number;
-  title: string;
-  message: string;
-  imageSrc?: string;
-  type: 'info' | 'error' | 'success';
-}
-
-export interface Prompts {
-  system: string;
-  removeBackground: string;
-  analyzeSelection: string;
-  detectProductCategory: string;
-  generateCreativeOptions: string;
-  generateLifestyle: string;
-  refineLifestyle: string;
-  editImageWithMask: string;
-  upscaleImage: string;
-  enhancePrompt: string;
-  generateImageAdPrompt: string;
-  generateAdCopy: string;
-  prefillAdBrief: string;
-  autocompleteAdBrief: string;
-  generateStudioBackground: string;
-  suggestVisualPrompts: string;
-  editLogo: string;
-  generatePlatformContent: string;
-}
-
+// For Ad Creative Editor / Templates
 export interface AdCreativeState {
   headline: string;
   body: string;
@@ -194,36 +170,80 @@ export interface AdCreativeState {
   font: string;
   templateId: string;
   showLogo: boolean;
-  backgroundColor: string; // For text boxes/buttons
-
-  // Updated/New properties
+  backgroundColor: string;
   showHeadline: boolean;
   showCta: boolean;
-  headlineSize: number; // As a percentage of canvas width
+  headlineSize: number;
   headlineAlign: 'left' | 'center' | 'right';
-  headlinePosition: { x: number; y: number }; // As a percentage of canvas dimensions
-  ctaSize: number; // As a percentage of canvas width
-  ctaPosition: { x: number; y: number }; // As a percentage of canvas dimensions
-  logoPosition: { x: number; y: number }; // As a percentage of canvas dimensions
-  logoScale: number; // As a percentage of canvas width
-  textShadow: boolean; // Add a shadow to text for readability
+  headlinePosition: { x: number, y: number };
+  ctaSize: number;
+  ctaPosition: { x: number, y: number };
+  logoPosition: { x: number, y: number };
+  logoScale: number;
+  textShadow: boolean;
   textOutline: boolean;
   textOutlineColor: string;
-  textOutlineWidth: number; // In pixels, relative to canvas size
+  textOutlineWidth: number;
+}
+export interface AdTemplate {
+    id: string;
+    name: string;
+    icon: React.FC<React.SVGProps<SVGSVGElement>>;
+    draw: (
+        ctx: CanvasRenderingContext2D,
+        canvas: HTMLCanvasElement,
+        state: AdCreativeState,
+        logoImg?: HTMLImageElement
+    ) => {
+        logo: DOMRectReadOnly;
+        headline: DOMRectReadOnly;
+        cta: DOMRectReadOnly;
+    } | void;
 }
 
-export interface AdTemplate {
-  id: string;
-  name: string;
-  icon: React.FC<React.SVGProps<SVGSVGElement>>;
-  draw: (
-    ctx: CanvasRenderingContext2D,
-    canvas: HTMLCanvasElement,
-    state: AdCreativeState,
-    logoImg?: HTMLImageElement
-  ) => {
-    logo: DOMRectReadOnly;
-    headline: DOMRectReadOnly;
-    cta: DOMRectReadOnly;
-} | void;
+// For Image Blender
+export interface BlendedImage {
+    id: string;
+    image: HTMLImageElement;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    opacity: number;
+    zIndex: number;
+}
+
+// For Prompts
+export interface Prompts {
+  [key: string]: string;
+}
+
+// For Library Selector
+export interface LibrarySelectionConfig {
+  multiple: boolean;
+  onSelect: (images: LibraryImage[]) => void;
+}
+
+// For Settings
+export type ModelType = 'text' | 'visual' | 'edit' | 'upscale';
+export type ModelConfig = Record<ModelType, string>;
+
+// FIX: Corrected HarmCategory to be compatible with the version of @google/genai being used. The compiler error suggested a different value was expected for HARM_CATEGORY_HARASSMENT.
+// FIX: Updated HarmCategory to use 'HARM_CATEGORY_IMAGE_HARASSMENT' as suggested by the compiler error to match the type expected by @google/genai.
+export type HarmCategory = 'HARM_CATEGORY_IMAGE_HARASSMENT' | 'HARM_CATEGORY_HATE_SPEECH' | 'HARM_CATEGORY_SEXUALLY_EXPLICIT' | 'HARM_CATEGORY_DANGEROUS_CONTENT';
+export type HarmBlockThreshold = 'BLOCK_NONE' | 'BLOCK_ONLY_HIGH' | 'BLOCK_LOW_AND_ABOVE' | 'BLOCK_MEDIUM_AND_ABOVE';
+
+export interface SafetySetting {
+    category: HarmCategory;
+    threshold: HarmBlockThreshold;
+}
+
+// For Sharing
+export interface SharedImageData {
+  src: string;
+  prompt?: string;
+  notes?: string;
+  width: number;
+  height: number;
+  createdAt: number;
 }

@@ -1,6 +1,6 @@
 
-
 import React, { useState, useEffect } from 'react';
+// FIX: Correct import path for types.
 import { AdBrief, AdBriefWizardState } from '../types';
 import { PaperclipIcon } from './icons/PaperclipIcon';
 import { MagicWandIcon } from './icons/MagicWandIcon';
@@ -106,7 +106,7 @@ const AdBriefWizard: React.FC<AdBriefWizardProps> = ({ wizardState, onGenerate, 
     setBrief(prev => {
         const newBrief = JSON.parse(JSON.stringify(prev));
         const keys = path.split('.');
-        let current = newBrief;
+        let current: any = newBrief;
         for (let i = 0; i < keys.length - 1; i++) {
             current = current[keys[i]];
         }
@@ -115,19 +115,34 @@ const AdBriefWizard: React.FC<AdBriefWizardProps> = ({ wizardState, onGenerate, 
     });
   };
 
+  // FIX: Rewrote the function to be type-safe and correctly handle nested paths.
   const handleCheckboxChange = (path: string, value: string) => {
-      const keys = path.split('.');
-      let currentValues: string[] = brief as any;
-      keys.forEach(key => {
-          currentValues = currentValues[key];
-      });
-      
-      const newValues = currentValues.includes(value)
-          ? currentValues.filter(v => v !== value)
-          : [...currentValues, value];
-      
-      handleBriefChange(path, newValues);
+    const keys = path.split('.');
+    
+    // Navigate to the target array
+    let current: any = brief;
+    for (const key of keys) {
+        if (current === undefined) {
+            console.error(`Invalid path for checkbox change: ${path}`);
+            return;
+        }
+        current = current[key];
+    }
+    
+    if (!Array.isArray(current)) {
+        console.error(`Path did not resolve to an array: ${path}`);
+        return;
+    }
+    
+    const currentValues: string[] = current;
+    
+    const newValues = currentValues.includes(value)
+        ? currentValues.filter(v => v !== value)
+        : [...currentValues, value];
+    
+    handleBriefChange(path, newValues);
   };
+
 
   const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

@@ -1,32 +1,31 @@
-
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { GeneratedImage, AdBrief, ToastInfo, AdCreativeState, ToolTab } from '../../types';
+// FIX: Correct import path for the Zustand store.
+import { useAppStore } from '../../store';
+// FIX: Correct import path for types.
+// FIX: Add LibraryImage to imports
+import { GeneratedImage, AdBrief, AdCreativeState, LibraryImage } from '../../types';
 import ImageUploader from '../ImageUploader';
 import { createThumbnail, downloadImage } from '../../utils/imageUtils';
+// FIX: Correct import path for geminiService.
 import { generateAdImage, generateAdCopy, enhancePromptStream, suggestVisualPrompts, generatePlatformContentStream } from '../../services/geminiService';
 import { PaperclipIcon } from '../icons/PaperclipIcon';
 import { RefreshIcon } from '../icons/RefreshIcon';
 import { XIcon } from '../icons/XIcon';
 import AdCreativeEditor from '../AdCreativeEditor';
-import { adTemplates } from '../../adTemplates';
 import ImageEditor from '../ImageEditor';
 import { BrushIcon } from '../icons/BrushIcon';
 import { MagicWandIcon } from '../icons/MagicWandIcon';
 import AdCopyDisplay from '../AdCopyDisplay';
 import { DownloadIcon } from '../icons/DownloadIcon';
+// FIX: Correct import path for PlatformContentGenerator component.
 import PlatformContentGenerator from '../PlatformContentGenerator';
 import { PhotoIcon } from '../icons/PhotoIcon';
 import { ChatIcon } from '../icons/ChatIcon';
 import ToggleSwitch from '../ToggleSwitch';
-// FIX: Import `UpscaleIcon` to resolve "Cannot find name 'UpscaleIcon'" error.
 import { UpscaleIcon } from '../icons/UpscaleIcon';
 
 interface AdGeneratorTabProps {
-    addToast: (toast: Omit<ToastInfo, 'id'>) => void;
-    addImagesToLibrary: (images: GeneratedImage[]) => void;
     initialImage?: GeneratedImage | null;
-    onDone?: () => void;
-    onUseAsInput: (tool: ToolTab, image: GeneratedImage) => void;
 }
 
 interface AdCopyTabsProps {
@@ -124,36 +123,38 @@ const CreativesContent: React.FC<{
     finalCreatives: GeneratedImage[];
     setViewingImageSrc: (src: string | null) => void;
     setEditingFinalCreativeIndex: (index: number | null) => void;
-    onUseAsInput: (tool: ToolTab, image: GeneratedImage) => void;
     handleDownloadFinalCreative: (image: GeneratedImage) => void;
     isDownloading: string | null;
-}> = ({ finalCreatives, setViewingImageSrc, setEditingFinalCreativeIndex, onUseAsInput, handleDownloadFinalCreative, isDownloading }) => (
-    <>
-        <h3 className="text-xl font-bold mb-4">Final Creatives</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {finalCreatives.map((img, index) => (
-                img.src ? (
-                    <div key={img.id} className="space-y-2 animate-fade-in">
-                        <div className="relative">
-                            <img src={img.thumbnailSrc || img.src} onClick={() => setViewingImageSrc(img.src)} alt="Final ad creative" className="rounded-lg w-full aspect-square object-cover cursor-pointer"/>
+    openUpscaler: (image: GeneratedImage) => void;
+}> = ({ finalCreatives, setViewingImageSrc, setEditingFinalCreativeIndex, handleDownloadFinalCreative, isDownloading, openUpscaler }) => {
+    return (
+        <>
+            <h3 className="text-xl font-bold mb-4">Final Creatives</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {finalCreatives.map((img, index) => (
+                    img.src ? (
+                        <div key={img.id} className="space-y-2 animate-fade-in">
+                            <div className="relative">
+                                <img src={img.thumbnailSrc || img.src} onClick={() => setViewingImageSrc(img.src)} alt="Final ad creative" className="rounded-lg w-full aspect-square object-cover cursor-pointer"/>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setEditingFinalCreativeIndex(index)} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md transition-colors"><BrushIcon className="w-4 h-4" /> <span>Edit</span></button>
+                                <button onClick={() => openUpscaler(img)} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md transition-colors"><UpscaleIcon className="w-4 h-4" /> <span>Upscale</span></button>
+                                <button onClick={() => handleDownloadFinalCreative(img)} disabled={isDownloading === img.id} className="p-2 bg-dark-input hover:bg-dark-border text-dark-text-primary rounded-md transition-colors disabled:opacity-50" title="Download">
+                                    {isDownloading === img.id ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5" />}
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setEditingFinalCreativeIndex(index)} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md transition-colors"><BrushIcon className="w-4 h-4" /> <span>Edit</span></button>
-                            <button onClick={() => onUseAsInput('upscaler', img)} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md transition-colors"><UpscaleIcon className="w-4 h-4" /> <span>Upscale</span></button>
-                            <button onClick={() => handleDownloadFinalCreative(img)} disabled={isDownloading === img.id} className="p-2 bg-dark-input hover:bg-dark-border text-dark-text-primary rounded-md transition-colors disabled:opacity-50" title="Download">
-                                {isDownloading === img.id ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <DownloadIcon className="w-5 h-5" />}
-                            </button>
+                    ) : (
+                        <div key={img.id || index} className="aspect-square bg-dark-input rounded-xl border-2 border-red-500/50 flex items-center justify-center text-center p-2">
+                            <p className="text-sm font-semibold text-red-400">Generation Failed</p>
                         </div>
-                    </div>
-                ) : (
-                    <div key={img.id || index} className="aspect-square bg-dark-input rounded-xl border-2 border-red-500/50 flex items-center justify-center text-center p-2">
-                        <p className="text-sm font-semibold text-red-400">Generation Failed</p>
-                    </div>
-                )
-            ))}
-        </div>
-    </>
-);
+                    )
+                ))}
+            </div>
+        </>
+    );
+}
 
 const TabButton: React.FC<{
     label: string;
@@ -168,10 +169,20 @@ const TabButton: React.FC<{
 );
 
 
-const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLibrary, initialImage, onDone, onUseAsInput }) => {
+const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
+    const { 
+        addToast, 
+        addImagesToLibrary, 
+        clearRecreationData,
+        adGeneratorResults: finalCreatives,
+        setAdGeneratorResults,
+        updateAdGeneratorResult,
+        openLibrarySelector,
+        openUpscaler,
+    } = useAppStore();
+    
     const [step, setStep] = useState<AdGenStep>('UPLOAD');
     const [sourceImage, setSourceImage] = useState<GeneratedImage | null>(null);
-    const [imageWithPlacements, setImageWithPlacements] = useState<GeneratedImage | null>(null);
     
     // Brief Step State
     const [productTopic, setProductTopic] = useState('');
@@ -194,7 +205,6 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     const [imageType, setImageType] = useState(IMAGE_TYPES[0]);
     const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0].value);
     
-    const [finalCreatives, setFinalCreatives] = useState<GeneratedImage[]>([]);
     const [editingFinalCreativeIndex, setEditingFinalCreativeIndex] = useState<number | null>(null);
 
     const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -207,11 +217,11 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     const [resultsView, setResultsView] = useState<ResultsView>('creatives');
     const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
-    const [pendingEdit, setPendingEdit] = useState<{ index: number; dataUrl: string } | null>(null);
+    const [pendingEdit, setPendingEdit] = useState<{ sourceId: string; dataUrl: string } | null>(null);
     
     // State for Ad Copy
     const [adCopyHtml, setAdCopyHtml] = useState('');
-    const [isGeneratingAdCopy, setIsGeneratingAdCopy] = useState(true);
+    const [isGeneratingAdCopy, setIsGeneratingAdCopy] = useState(false);
 
     // State for Platform Content
     const [platformGeneratedContent, setPlatformGeneratedContent] = useState('');
@@ -225,7 +235,6 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     const resetState = () => {
         setStep('UPLOAD');
         setSourceImage(null);
-        setImageWithPlacements(null);
         setProductTopic('');
         setPlacementCreativeState(initialCreativeState);
         setNumVariations(2);
@@ -234,7 +243,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         setPlatform(INITIAL_PLATFORMS[0]);
         setImageType(IMAGE_TYPES[0]);
         setAspectRatio(ASPECT_RATIOS[0].value);
-        setFinalCreatives([]);
+        setAdGeneratorResults([]);
         setEditingFinalCreativeIndex(null);
         setLogoFile(null);
         setLogoImage(null);
@@ -244,7 +253,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         setResultsView('creatives');
         setStyleReferenceImage(null);
         setAdCopyHtml('');
-        setIsGeneratingAdCopy(true);
+        setIsGeneratingAdCopy(false);
         setPlatformGeneratedContent('');
         setIsGeneratingPlatformContent(false);
     }
@@ -255,12 +264,23 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         setStep('PLACEMENT');
     }, []);
 
+    const handleSelectFromLibrary = () => {
+        openLibrarySelector({
+            multiple: false,
+            onSelect: (images) => {
+                if (images[0]) {
+                    handleImageUpload(images[0]);
+                }
+            }
+        });
+    };
+
     useEffect(() => {
         if (initialImage && !sourceImage) {
             handleImageUpload(initialImage);
-            onDone?.();
+            clearRecreationData();
         }
-    }, [initialImage, onDone, sourceImage, handleImageUpload]);
+    }, [initialImage, sourceImage, handleImageUpload, clearRecreationData]);
 
     // Adjust the visual prompts array size when numVariations changes
     useEffect(() => {
@@ -272,34 +292,6 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
             return newPrompts;
         });
     }, [numVariations]);
-
-    const handleSavePlacements = useCallback(async () => {
-        const canvas = placementEditorContainerRef.current?.querySelector('canvas');
-        if (!canvas) {
-            addToast({ title: 'Error', message: 'Could not find the editor canvas to save placements.', type: 'error' });
-            return;
-        }
-
-        setIsProcessing(true);
-        setProcessingMessage('Saving placements...');
-
-        try {
-            const src = canvas.toDataURL('image/png');
-            const thumbnailSrc = await createThumbnail(src, 256, 256);
-            const newImageWithPlacements: GeneratedImage = {
-                id: `placed_${Date.now()}`,
-                src,
-                thumbnailSrc,
-            };
-            setImageWithPlacements(newImageWithPlacements);
-            setStep('VISUALS');
-        } catch (error) {
-            console.error(error);
-            addToast({ title: 'Save Placements Failed', message: 'Could not render the final image with placements.', type: 'error' });
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [addToast]);
     
     const handleStyleReferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -317,12 +309,27 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         }
     };
 
+    const handleSelectStyleFromLibrary = () => {
+        openLibrarySelector({
+            multiple: false,
+            onSelect: async (selectedImages) => {
+                if (selectedImages[0]) {
+                    const image = selectedImages[0];
+                    const res = await fetch(image.src);
+                    const blob = await res.blob();
+                    const file = new File([blob], "style_ref.png", { type: blob.type });
+                    setStyleReferenceImage(file);
+                }
+            }
+        });
+    };
+
     const handleSuggestPrompts = async () => {
-        if (!imageWithPlacements || isLoadingSuggestions) return;
+        if (!sourceImage || isLoadingSuggestions) return;
         
         setIsLoadingSuggestions(true);
         try {
-            const res = await fetch(imageWithPlacements.src);
+            const res = await fetch(sourceImage.src);
             const blob = await res.blob();
             const imageFile = new File([blob], "product.png", { type: blob.type });
             const suggestions = await suggestVisualPrompts(imageFile, numVariations, styleReferenceImage || undefined);
@@ -385,7 +392,11 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     };
 
     const handleGenerateVisuals = async () => {
-        if (!sourceImage) return;
+        if (!sourceImage) {
+            addToast({ title: 'Generation Error', message: 'Missing source product image.', type: 'error' });
+            return;
+        }
+
         const promptsToGenerate = visualPrompts.slice(0, numVariations).filter(p => p.trim() !== '');
         if (promptsToGenerate.length === 0) {
             addToast({ title: 'Missing Prompt', message: 'Please enter at least one visual prompt.', type: 'error' });
@@ -398,39 +409,17 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
             src: '',
             isLoading: true,
         }));
-        setFinalCreatives(placeholders);
-        
-        const nanoBananaTips = `Six Nano Banana tips for better images:
-1. Describe scenes, not keywords.
-2. Edit with text + image.
-3. Blend multiple images/styles.
-4. Refine in conversation.
-5. Render text cleanly.
-6. Try comics, logos, or mockups.`;
-
-        let placementInstructions = '';
-        const instructions: string[] = [];
-        if (placementCreativeState.showHeadline && placementCreativeState.headline) {
-            instructions.push(`- A headline with text "${placementCreativeState.headline}" is positioned at the top of the image (around y=${placementCreativeState.headlinePosition.y.toFixed(1)}%).`);
-        }
-        if (placementCreativeState.showCta && placementCreativeState.cta) {
-            instructions.push(`- A call-to-action button with text "${placementCreativeState.cta}" is positioned at the bottom of the image (around y=${placementCreativeState.ctaPosition.y.toFixed(1)}%).`);
-        }
-        if (logoFile) {
-            instructions.push(`- A brand logo (provided as a separate image) is positioned in a corner of the image (around x=${placementCreativeState.logoPosition.x.toFixed(1)}%, y=${placementCreativeState.logoPosition.y.toFixed(1)}%).`);
-        }
-
-        if (instructions.length > 0) {
-            placementInstructions = `\n\n**Layout Constraints**: The final image must include several overlay elements. You are provided with the base product image and a logo image. You must render the text elements yourself. Here are the constraints:\n${instructions.join('\n')}\nIt is CRITICAL that you render the text cleanly and blend all elements seamlessly.`;
-        }
+        setAdGeneratorResults(placeholders);
         
         const referenceInputs: (File | { dataUrl: string })[] = [];
-        if (sourceImage) {
-            referenceInputs.push({ dataUrl: sourceImage.src });
-        }
-        if (logoFile) {
+        referenceInputs.push({ dataUrl: sourceImage.src });
+        
+        let logoIndex = -1;
+        if (logoFile && placementCreativeState.showLogo) {
             referenceInputs.push(logoFile);
+            logoIndex = referenceInputs.length -1;
         }
+        
         if (styleReferenceImage) {
             referenceInputs.push(styleReferenceImage);
         }
@@ -441,37 +430,53 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
             setProcessingMessage(`Generating visual ${i + 1} of ${promptsToGenerate.length}...`);
             try {
                 const userPrompt = promptsToGenerate[i];
-                const finalPromptForVisual = `${userPrompt}${placementInstructions}`;
-                const finalPrompt = `${nanoBananaTips}\n\nYou are an expert AI image editor following these tips. You are provided with a base product image, and potentially a brand logo image. Your task is to generate a new, photorealistic scene based on the user's prompt. You MUST composite the product (and logo if provided) from the images seamlessly into this new scene. You must also render the text elements as described in the layout constraints. The final image should be a cohesive ad creative. User prompt for the new scene and layout: "${finalPromptForVisual}"`;
+                
+                let placementInstructions = `Composite the provided product image (the first reference image) into a new scene based on the user prompt. `;
+                
+                if (imageType === 'Ad Creative') {
+                    if (placementCreativeState.showHeadline && placementCreativeState.headline) {
+                        placementInstructions += `The headline "${placementCreativeState.headline}" should be placed prominently on the image as text, styled according to the scene's aesthetic. Position it near the coordinates X=${Math.round(placementCreativeState.headlinePosition.x)}%, Y=${Math.round(placementCreativeState.headlinePosition.y)}%. `;
+                    }
+                    if (placementCreativeState.showCta && placementCreativeState.cta) {
+                        placementInstructions += `A call-to-action button with the text "${placementCreativeState.cta}" should be included in a suitable location. Position it near the coordinates X=${Math.round(placementCreativeState.ctaPosition.x)}%, Y=${Math.round(placementCreativeState.ctaPosition.y)}%. `;
+                    }
+                    if (logoFile && placementCreativeState.showLogo) {
+                        placementInstructions += `The provided logo (reference image at index ${logoIndex}) should be placed tastefully, usually in a corner. Position it near the coordinates X=${Math.round(placementCreativeState.logoPosition.x)}%, Y=${Math.round(placementCreativeState.logoPosition.y)}%. `;
+                    }
+                }
+                
+                placementInstructions += `Blend all elements seamlessly and photorealistically. The final output must be a single, cohesive image.`;
+                
+                const finalPrompt = `You are an expert AI image editor and compositor. Your task is to generate an image based on a user prompt and then composite several elements into it according to detailed instructions.
+
+User prompt for the new background scene: "${userPrompt}"
+
+CRITICAL COMPOSITING INSTRUCTIONS:
+${placementInstructions}`;
                 
                 const [newImage] = await generateAdImage(finalPrompt, aspectRatio, 1, referenceInputs);
-                const result = { ...newImage, isLoading: false };
+                
+                // Save to library with metadata
+                const [savedImage] = await addImagesToLibrary([{
+                    src: newImage.src,
+                    prompt: userPrompt,
+                    originalId: sourceImage?.id,
+                }]);
+
+                const result = { ...savedImage, isLoading: false };
                 allResults.push(result);
-                 setFinalCreatives(prev => {
-                    const updated = [...prev];
-                    updated[i] = result;
-                    return updated;
-                });
+                updateAdGeneratorResult('replace', result, placeholders[i].id);
             } catch (error) {
                 console.error(`Failed to generate visual ${i + 1}`, error);
                 addToast({ title: `Visual ${i + 1} Failed`, message: error instanceof Error ? error.message : 'Unknown error.', type: 'error' });
                 const errorResult = { id: `error_${i}_${Date.now()}`, src: '', isLoading: false };
                 allResults.push(errorResult);
-                 setFinalCreatives(prev => {
-                    const updated = [...prev];
-                    updated[i] = errorResult;
-                    return updated;
-                });
+                updateAdGeneratorResult('replace', errorResult, placeholders[i].id);
             }
         }
         
         setProcessingMessage('');
         setStep('RESULTS');
-
-        const successfulGenerations = allResults.filter(r => r.src);
-        if (successfulGenerations.length > 0) {
-            addImagesToLibrary(successfulGenerations);
-        }
     };
 
 
@@ -495,48 +500,38 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     };
 
     
+    // FIX: Replaced the direct-save logic with a flow that uses a confirmation modal.
     const handleSaveEditedFinalCreative = useCallback((finalImageDataUrl: string) => {
         if (editingFinalCreativeIndex === null) return;
-        setPendingEdit({ index: editingFinalCreativeIndex, dataUrl: finalImageDataUrl });
+        const sourceImage = finalCreatives[editingFinalCreativeIndex];
+        if (!sourceImage?.id) return;
+        setPendingEdit({ sourceId: sourceImage.id, dataUrl: finalImageDataUrl });
         setEditingFinalCreativeIndex(null);
-    }, [editingFinalCreativeIndex]);
+    }, [editingFinalCreativeIndex, finalCreatives]);
 
-    const resolvePendingEdit = async (action: 'replace' | 'copy') => {
+    // FIX: Added the missing function to resolve the user's choice from the confirmation modal.
+    const resolvePendingEdit = useCallback(async (action: 'replace' | 'copy') => {
         if (!pendingEdit) return;
+        
+        const { sourceId, dataUrl } = pendingEdit;
 
-        const { index, dataUrl } = pendingEdit;
+        const [savedImage] = await addImagesToLibrary([{
+            src: dataUrl,
+            originalId: sourceId,
+            prompt: `Edited from creative ${sourceId}`,
+        }]);
 
-        try {
-            const newThumbnail = await createThumbnail(dataUrl, 256, 256);
-            const newImage: GeneratedImage = {
-                id: `edited_final_${Date.now()}_${index}`,
-                src: dataUrl,
-                thumbnailSrc: newThumbnail,
-            };
-
-            if (action === 'replace') {
-                setFinalCreatives(prev => {
-                    const newCreatives = [...prev];
-                    newCreatives[index] = newImage;
-                    return newCreatives;
-                });
-                 addImagesToLibrary([newImage]);
-                addToast({ title: 'Creative Replaced', message: 'Your ad creative has been updated and saved to the library.', type: 'success', imageSrc: newThumbnail });
-            } else { // 'copy'
-                setFinalCreatives(prev => {
-                    const newCreatives = [...prev];
-                    newCreatives.splice(index + 1, 0, newImage);
-                    return newCreatives;
-                });
-                 addImagesToLibrary([newImage]);
-                addToast({ title: 'Creative Copied', message: 'Your edited ad creative has been saved as a new copy to the library.', type: 'success', imageSrc: newThumbnail });
-            }
-        } catch (error) {
-            addToast({ title: 'Save Failed', message: 'Could not process the edited image.', type: 'error' });
-        } finally {
-            setPendingEdit(null);
-        }
-    };
+        updateAdGeneratorResult(action, savedImage, sourceId);
+        
+        addToast({ 
+            title: 'Creative Saved', 
+            message: `Your edited creative has been saved ${action === 'copy' ? 'as a copy.' : 'by replacing the original.'}`, 
+            type: 'success', 
+            imageSrc: savedImage.thumbnailSrc 
+        });
+        
+        setPendingEdit(null);
+    }, [pendingEdit, addImagesToLibrary, updateAdGeneratorResult, addToast]);
     
     const briefForAdCopy = useMemo((): AdBrief => ({
         ...initialAdBrief,
@@ -545,30 +540,46 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         visuals: { ...initialAdBrief.visuals, onImageText: placementCreativeState.headline }
     }), [platform, placementCreativeState, productTopic]);
     
-    useEffect(() => {
-        if (step !== 'RESULTS') return;
-
-        const generate = async () => {
-            setIsGeneratingAdCopy(true);
-            setAdCopyHtml('');
-            try {
-                const stream = generateAdCopy(briefForAdCopy);
-                let fullText = '';
-                for await (const chunk of stream) {
-                    fullText += chunk;
-                    setAdCopyHtml(fullText);
-                }
-            } catch (error) {
-                console.error("Ad copy generation failed", error);
-                setAdCopyHtml("<p>Sorry, there was an error generating the ad copy.</p>");
-            } finally {
-                setIsGeneratingAdCopy(false);
+    const handleGenerateAdCopy = useCallback(async () => {
+        setIsGeneratingAdCopy(true);
+        setAdCopyHtml('');
+        try {
+            const stream = generateAdCopy(briefForAdCopy);
+            let fullText = '';
+            for await (const chunk of stream) {
+                fullText += chunk;
+                setAdCopyHtml(fullText);
             }
-        };
+        } catch (error) {
+            console.error("Ad copy generation failed", error);
+            setAdCopyHtml("<p>Sorry, there was an error generating the ad copy.</p>");
+        } finally {
+            setIsGeneratingAdCopy(false);
+        }
+    }, [briefForAdCopy]);
 
-        generate();
-    }, [step, briefForAdCopy]);
-
+    const adCopyContent = useMemo(() => {
+        if (isGeneratingAdCopy) {
+            return <AdCopyDisplay htmlContent="" isLoading={true} />;
+        }
+        if (adCopyHtml) {
+            return <AdCopyDisplay htmlContent={adCopyHtml} isLoading={false} />;
+        }
+        return (
+            <div className="text-center p-8 space-y-4 rounded-lg bg-dark-input/50">
+                <h3 className="text-xl font-bold text-white">Ready to Generate Ad Copy?</h3>
+                <p className="text-dark-text-secondary max-w-sm mx-auto">Click the button to generate platform-specific copy, A/B test ideas, and more based on your ad creative.</p>
+                <button
+                    onClick={handleGenerateAdCopy}
+                    className="flex items-center justify-center gap-2 bg-brand-secondary text-white font-bold py-2.5 px-6 rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                    <MagicWandIcon className="w-5 h-5" />
+                    Generate Copy with AI
+                </button>
+            </div>
+        );
+    }, [adCopyHtml, isGeneratingAdCopy, handleGenerateAdCopy]);
+    
     const handleGeneratePlatformContent = useCallback(async (prompt: string) => {
         setIsGeneratingPlatformContent(true);
         setPlatformGeneratedContent('');
@@ -591,15 +602,13 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         }
     }, [platform, briefForAdCopy, addToast]);
 
-    const adCopyContent = useMemo(() => <AdCopyDisplay htmlContent={adCopyHtml} isLoading={isGeneratingAdCopy} />, [adCopyHtml, isGeneratingAdCopy]);
     const platformContent = useMemo(() => <PlatformContentGenerator
         platform={platform}
         brief={briefForAdCopy}
-        addToast={addToast}
         generatedContent={platformGeneratedContent}
         isLoading={isGeneratingPlatformContent}
         onGenerate={handleGeneratePlatformContent}
-    />, [platform, briefForAdCopy, addToast, platformGeneratedContent, isGeneratingPlatformContent, handleGeneratePlatformContent]);
+    />, [platform, briefForAdCopy, platformGeneratedContent, isGeneratingPlatformContent, handleGeneratePlatformContent]);
 
     const handleDownloadFinalCreative = (image: GeneratedImage) => {
         setIsDownloading(image.id);
@@ -623,7 +632,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     }
     
     if (step === 'UPLOAD') {
-        return <ImageUploader onUpload={(images) => handleImageUpload(images[0])} title="Ad Generator" subtitle="Upload a product image to generate an ad campaign." multiple={false} />;
+        return <ImageUploader onUpload={(images) => handleImageUpload(images[0])} onSelectFromLibrary={handleSelectFromLibrary} title="Ad Generator" subtitle="Upload a product image to generate an ad campaign." multiple={false} />;
     }
 
     const renderStepContent = () => {
@@ -643,7 +652,8 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                         </div>
                         <aside className="w-full md:w-80 border-t md:border-t-0 md:border-l border-dark-border flex flex-col bg-dark-surface">
                             <div className="p-4 flex-grow overflow-y-auto space-y-3">
-                                <h3 className="text-xl font-bold mb-2">Configure Ad</h3>
+                                <h3 className="text-xl font-bold mb-2">Configure Ad Elements</h3>
+                                <p className="text-xs text-dark-text-secondary -mt-2">Drag elements on the canvas to reposition them. The AI will use this layout as a reference.</p>
                                 <div>
                                     <label className="text-sm font-semibold block mb-1">Product Description</label>
                                     <input 
@@ -698,8 +708,8 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                             </div>
                              <div className="p-4 border-t border-dark-border bg-dark-surface/50 flex items-center gap-2 flex-shrink-0">
                                 <button onClick={() => setStep('UPLOAD')} className="text-sm font-semibold bg-dark-input hover:bg-dark-border border border-dark-border px-4 py-3 rounded-md">Back</button>
-                                <button onClick={handleSavePlacements} disabled={isProcessing} className="flex-1 w-full bg-brand-primary hover:bg-brand-secondary text-white font-bold px-4 py-3 rounded-md">
-                                    {isProcessing ? processingMessage : 'Continue'}
+                                <button onClick={() => setStep('VISUALS')} className="flex-1 w-full bg-brand-primary hover:bg-brand-secondary text-white font-bold px-4 py-3 rounded-md">
+                                    Continue
                                 </button>
                             </div>
                         </aside>
@@ -711,9 +721,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                         <div className="flex-1 overflow-y-auto">
                            <fieldset disabled={isLoadingSuggestions || isEnhancingPrompt !== null} className="w-full max-w-3xl mx-auto p-4 md:p-6 space-y-4">
                                 <h2 className="text-3xl font-bold text-center">Design Your Ad Visuals</h2>
-                                <div className="flex justify-center">
-                                    {imageWithPlacements && <img src={imageWithPlacements.thumbnailSrc || imageWithPlacements.src} alt="Prepared product" className="w-24 h-24 rounded-lg border-2 border-dark-border" />}
-                                </div>
+                                <p className="text-center text-dark-text-secondary">Describe the background scene for your ad. The AI will blend your product and text into it.</p>
                                 
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-2">
                                      <div>
@@ -756,6 +764,9 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                                             <span className="truncate">{styleReferenceImage?.name ?? 'Upload style reference'}</span>
                                         </label>
                                         <input id="style-ref-upload" type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleStyleReferenceChange} />
+                                        <button onClick={handleSelectStyleFromLibrary} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Select from Library">
+                                            <PhotoIcon className="w-5 h-5" />
+                                        </button>
                                         {styleReferenceImage && (
                                             <button onClick={() => setStyleReferenceImage(null)} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Remove style reference">
                                                 <XIcon className="w-4 h-4" />
@@ -785,7 +796,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                                     </button>
                                     <button onClick={handleAddBlendingCommand} className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold bg-dark-input hover:bg-dark-border border border-dark-border px-4 py-2 rounded-md text-brand-secondary">
                                         <MagicWandIcon className="w-4 h-4" />
-                                        Add Blending Command
+                                        Add Blend Cmd
                                     </button>
                                 </div>
                             </fieldset>
@@ -855,9 +866,9 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                                     finalCreatives={finalCreatives}
                                     setViewingImageSrc={setViewingImageSrc}
                                     setEditingFinalCreativeIndex={setEditingFinalCreativeIndex}
-                                    onUseAsInput={onUseAsInput}
                                     handleDownloadFinalCreative={handleDownloadFinalCreative}
                                     isDownloading={isDownloading}
+                                    openUpscaler={openUpscaler}
                                 />
                             </div>
                             <div className="space-y-6">
@@ -873,9 +884,9 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                                     finalCreatives={finalCreatives}
                                     setViewingImageSrc={setViewingImageSrc}
                                     setEditingFinalCreativeIndex={setEditingFinalCreativeIndex}
-                                    onUseAsInput={onUseAsInput}
                                     handleDownloadFinalCreative={handleDownloadFinalCreative}
                                     isDownloading={isDownloading}
+                                    openUpscaler={openUpscaler}
                                 />
                             }
                             {resultsView === 'copy_and_tools' && 

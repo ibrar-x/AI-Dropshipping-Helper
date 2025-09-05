@@ -1,18 +1,20 @@
 
-
 import React, { useCallback, useState } from 'react';
 import { UploadIcon } from './icons/UploadIcon';
 import { ensureSupportedImageFormat, createThumbnail } from '../utils/imageUtils';
+// FIX: Correct import path for types.
 import { GeneratedImage } from '../types';
+import { PhotoIcon } from './icons/PhotoIcon';
 
 interface ImageUploaderProps {
   onUpload: (images: GeneratedImage[]) => void;
   title: string;
   subtitle: string;
   multiple?: boolean;
+  onSelectFromLibrary?: () => void;
 }
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({ onUpload, title, subtitle, multiple = false }) => {
+const ImageUploader: React.FC<ImageUploaderProps> = ({ onUpload, title, subtitle, multiple = false, onSelectFromLibrary }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFiles = useCallback(async (files: FileList) => {
@@ -100,6 +102,21 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onUpload, title, subtitle
             onChange={handleFileChange}
             multiple={multiple}
           />
+           {onSelectFromLibrary && (
+            <>
+              <div className="relative flex items-center justify-center my-4">
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-dark-border"></div>
+                <span className="relative bg-dark-bg px-2 text-xs uppercase text-dark-text-secondary">Or</span>
+              </div>
+              <button
+                onClick={onSelectFromLibrary}
+                className="w-full flex items-center justify-center gap-2 bg-dark-input border border-dark-border text-dark-text-primary hover:bg-dark-border px-4 py-3 rounded-xl text-sm font-bold transition-colors"
+              >
+                <PhotoIcon className="w-5 h-5" />
+                <span>Select from Library</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

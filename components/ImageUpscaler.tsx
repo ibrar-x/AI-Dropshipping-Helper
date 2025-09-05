@@ -1,7 +1,8 @@
 
-
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+// FIX: Correct import path for types.
 import { GeneratedImage, UpscaleOptions, UpscaleFactor, UpscaleProfile } from '../types';
+// FIX: Correct import path for geminiService.
 import { upscaleImage } from '../services/geminiService';
 import { SliderIcon } from './icons/SliderIcon';
 import { PlusIcon } from './icons/PlusIcon';
@@ -134,14 +135,21 @@ const ImageUpscaler: React.FC<ImageUpscalerProps> = ({ image, onSave, onCancel }
         setIsSliderDragging(true);
     };
     const handleSliderMouseUp = () => setIsSliderDragging(false);
-    const handleSliderMouseMove = (e: MouseEvent) => { if (isSliderDragging) handleSliderChange(e.clientX); };
+    
+    const handleSliderMouseMove = (e: MouseEvent) => { 
+        if (isSliderDragging) handleSliderChange(e.clientX); 
+    };
+    
     const handleSliderTouchStart = (e: React.TouchEvent) => {
         e.stopPropagation(); // Prevent pan from starting
         setIsSliderDragging(true);
     };
     const handleSliderTouchEnd = () => setIsSliderDragging(false);
-    const handleSliderTouchMove = (e: TouchEvent) => { if (isSliderDragging) handleSliderChange(e.touches[0].clientX); };
     
+    const handleSliderTouchMove = (e: TouchEvent) => { 
+        if (isSliderDragging && e.touches[0]) handleSliderChange(e.touches[0].clientX); 
+    };
+
     // Pan Logic
     const handlePanStart = (e: React.MouseEvent | React.TouchEvent) => {
         if (zoom <= 1) return;
@@ -187,6 +195,18 @@ const ImageUpscaler: React.FC<ImageUpscalerProps> = ({ image, onSave, onCancel }
         handleSliderTouchMove(e.nativeEvent);
         handlePanMove(e.nativeEvent);
     };
+    
+    useEffect(() => {
+        const currentRef = imageContainerRef.current;
+        if (!currentRef) return;
+
+        const touchMoveHandler = (e: TouchEvent) => handleContainerTouchMove({ nativeEvent: e } as any);
+        currentRef.addEventListener('touchmove', touchMoveHandler, { passive: false });
+
+        return () => {
+            currentRef.removeEventListener('touchmove', touchMoveHandler);
+        };
+    }, [isSliderDragging, isPanning]);
 
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in text-dark-text-primary">
@@ -202,7 +222,6 @@ const ImageUpscaler: React.FC<ImageUpscalerProps> = ({ image, onSave, onCancel }
                   onMouseLeave={handleContainerMouseUp}
                   onMouseMove={handleContainerMouseMove}
                   onTouchEnd={handleContainerTouchEnd}
-                  onTouchMove={handleContainerTouchMove}
                   onMouseDown={handlePanStart as any}
                   onTouchStart={handlePanStart as any}>
                 

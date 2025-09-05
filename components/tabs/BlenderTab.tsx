@@ -1,24 +1,38 @@
-
-
-import React, { useState, useCallback } from 'react';
-import { GeneratedImage, ToastInfo, ToolTab } from '../../types';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useAppStore } from '../../store';
+import { GeneratedImage, LibraryImage } from '../../types';
 import ImageUploader from '../ImageUploader';
 import ImageBlender from '../ImageBlender';
 
 interface BlenderTabProps {
-    addToast: (toast: Omit<ToastInfo, 'id'>) => void;
-    addImageToLibrary: (images: GeneratedImage[]) => void;
     initialImage?: GeneratedImage | null;
-    onDone?: () => void;
 }
 
-const BlenderTab: React.FC<BlenderTabProps> = ({ addToast, addImageToLibrary, initialImage, onDone }) => {
+const BlenderTab: React.FC<BlenderTabProps> = ({ initialImage }) => {
+    const { addToast, addImagesToLibrary, openLibrarySelector, clearRecreationData } = useAppStore();
+
     const [step, setStep] = useState<'UPLOAD' | 'BLENDING'>('UPLOAD');
     const [initialImages, setInitialImages] = useState<GeneratedImage[]>([]);
+
+    useEffect(() => {
+        if (initialImage) {
+            setInitialImages([initialImage]);
+            clearRecreationData();
+        }
+    }, [initialImage, clearRecreationData]);
 
     const handleImagesUpload = useCallback((images: GeneratedImage[]) => {
         setInitialImages(prev => [...prev, ...images]);
     }, []);
+
+    const handleSelectFromLibrary = () => {
+        openLibrarySelector({
+            multiple: true,
+            onSelect: (images) => {
+                handleImagesUpload(images);
+            }
+        });
+    };
 
     const startBlending = () => {
         if (initialImages.length < 2) {
@@ -29,30 +43,35 @@ const BlenderTab: React.FC<BlenderTabProps> = ({ addToast, addImageToLibrary, in
     };
 
     const handleBlendComplete = useCallback(async (compositeImage: GeneratedImage, resultImage: GeneratedImage, prompt: string) => {
-        addImageToLibrary([resultImage]);
+        const [savedImage] = await addImagesToLibrary([{
+            src: resultImage.src,
+            prompt: prompt,
+            notes: `Blended from ${initialImages.length} images.`
+        }]);
 
         addToast({
             title: 'Blend Saved to Library',
             message: 'Your new creation has been saved to the library.',
             type: 'success',
-            imageSrc: resultImage.thumbnailSrc
+            imageSrc: savedImage.thumbnailSrc
         });
         
         // Reset to upload screen for a new blend
         setStep('UPLOAD');
         setInitialImages([]);
 
-    }, [addToast, addImageToLibrary]);
+    }, [addToast, addImagesToLibrary, initialImages.length]);
 
     const reset = () => {
         setStep('UPLOAD');
         setInitialImages([]);
+        clearRecreationData();
     };
 
     if (step === 'UPLOAD') {
         return (
             <div className="flex-1 flex flex-col items-center justify-center p-4">
-                <ImageUploader onUpload={handleImagesUpload} title="Image Blender" subtitle="Upload multiple images to combine them into a new creation." multiple={true} />
+                <ImageUploader onUpload={handleImagesUpload} onSelectFromLibrary={handleSelectFromLibrary} title="Image Blender" subtitle="Upload multiple images to combine them into a new creation." multiple={true} />
                 {initialImages.length > 0 && (
                     <div className="mt-8 text-center animate-fade-in">
                         <div className="flex flex-wrap justify-center gap-4 mb-4">

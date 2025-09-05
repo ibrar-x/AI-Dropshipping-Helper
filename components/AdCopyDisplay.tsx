@@ -1,10 +1,7 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { CopyIcon } from './icons/CopyIcon';
 import { CheckIcon } from './icons/CheckIcon';
-import { AdBrief } from '../types';
-import { generateAdCopy } from '../services/geminiService';
 
 interface ParsedSection {
     title: string;
@@ -12,11 +9,12 @@ interface ParsedSection {
 }
 
 interface AdCopyDisplayProps {
-    brief: AdBrief;
+    htmlContent: string;
+    isLoading: boolean;
 }
 
 const CopyButton: React.FC<{ textToCopy: string }> = ({ textToCopy }) => {
-    const [copied, setCopied] = useState(false);
+    const [copied, setCopied] = React.useState(false);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(textToCopy);
@@ -31,34 +29,7 @@ const CopyButton: React.FC<{ textToCopy: string }> = ({ textToCopy }) => {
     );
 };
 
-const AdCopyDisplay: React.FC<AdCopyDisplayProps> = ({ brief }) => {
-    const [htmlContent, setHtmlContent] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        if (!brief) return;
-
-        const generate = async () => {
-            setIsLoading(true);
-            setHtmlContent('');
-            try {
-                const stream = generateAdCopy(brief);
-                let fullText = '';
-                for await (const chunk of stream) {
-                    fullText += chunk;
-                    setHtmlContent(fullText);
-                }
-            } catch (error) {
-                console.error("Ad copy generation failed", error);
-                setHtmlContent("<p>Sorry, there was an error generating the ad copy.</p>");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        generate();
-    }, [brief]);
-
+const AdCopyDisplay: React.FC<AdCopyDisplayProps> = ({ htmlContent, isLoading }) => {
     const parsedData = useMemo(() => {
         if (typeof window === 'undefined' || !htmlContent) return [];
 
@@ -97,7 +68,7 @@ const AdCopyDisplay: React.FC<AdCopyDisplayProps> = ({ brief }) => {
         return sections;
     }, [htmlContent]);
     
-    if (isLoading && !htmlContent) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center p-8">
                 <div className="w-6 h-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>

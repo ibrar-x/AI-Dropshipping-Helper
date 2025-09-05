@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Modality, Type, Chat, Content } from "@google/genai";
 import { dataURLtoBase64, getImageDimensions, ensureSupportedImageFormat, createThumbnail } from "../utils/imageUtils";
 import { ProductCategory, SelectionAnalysis, EditType, DetectionResult, UpscaleOptions, CreativeOptions, GeneratedImage, Prompts, AdBrief } from "../types";
@@ -641,23 +639,34 @@ export function generateAdCopy(brief: AdBrief) {
     return generateTextStream(briefText, activePrompts.generateAdCopy);
 }
 
-export const suggestVisualPrompts = async (imageFile: File, count: number): Promise<string[]> => {
+export const suggestVisualPrompts = async (imageFile: File, count: number, styleReferenceFile?: File): Promise<string[]> => {
     const client = getClient();
     try {
         const { base64, mimeType } = await ensureSupportedImageFormat(imageFile);
         
-        const dynamicSystemInstruction = `You are a world-class creative director for e-commerce brands. The user has provided an image of their product with a transparent background.
+        const parts: ContentPart[] = [
+            { inlineData: { data: base64, mimeType } },
+        ];
+        
+        let userText = `Suggest ${count} creative visual prompts for this product.`;
+
+        if (styleReferenceFile) {
+            const { base64: styleBase64, mimeType: styleMimeType } = await ensureSupportedImageFormat(styleReferenceFile);
+            parts.push({ inlineData: { data: styleBase64, mimeType: styleMimeType } });
+            userText += " The prompts should be inspired by the style, composition, and mood of the second image provided."
+        }
+        
+        parts.push({ text: userText });
+        
+        const dynamicSystemInstruction = `You are a world-class creative director for e-commerce brands. The user has provided an image of their product with a transparent background${styleReferenceFile ? ' and a style reference image' : ''}.
 Your task is to generate ${count} distinct, creative, and compelling text-to-image prompt ideas for a lifestyle or ad photoshoot featuring this product.
-The prompts should be diverse, covering different styles (e.g., minimalist, rustic, modern, vibrant).
+The prompts should be diverse, covering different styles (e.g., minimalist, rustic, modern, vibrant)${styleReferenceFile ? ', but heavily influenced by the provided style reference image' : ''}.
 Your entire response MUST be a single, valid JSON object with a single key "suggestions", which is an array of strings.`;
 
         const response = await client.models.generateContent({
             model: textModel,
             contents: {
-                parts: [
-                    { inlineData: { data: base64, mimeType } },
-                    { text: `Suggest ${count} creative visual prompts for this product.` }
-                ]
+                parts
             },
             config: {
                 systemInstruction: dynamicSystemInstruction,

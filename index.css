@@ -1,0 +1,40 @@
+/* index.css */
+
+/*
+  This file contains global styles and complements the Tailwind CSS loaded from the CDN.
+*/
+
+body {
+  /*
+    Base styles are applied via Tailwind classes in index.html and App.tsx
+    to ensure consistency with the design system.
+  */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar for Webkit browsers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1C1C1E; /* Corresponds to dark-surface */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #333333; /* Corresponds to dark-border */
+  border-radius: 20px;
+  border: 2px solid #1C1C1E; /* Creates a padding effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #9E9E9E; /* Corresponds to dark-text-secondary */
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333333 #1C1C1E;
+}

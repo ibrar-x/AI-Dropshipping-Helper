@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ToastInfo, Prompts, ToolTab, GeneratedImage } from './types';
 import { initializeAi, enhancePromptStream } from './services/geminiService';
@@ -30,7 +29,7 @@ const App: React.FC = () => {
   const [library, setLibrary] = useState<GeneratedImage[]>([]);
 
   // Cross-tool workflow state
-  const [recreationData, setRecreationData] = useState<GeneratedImage | null>(null);
+  const [recreationData, setRecreationData] = useState<{ tool: ToolTab, image: GeneratedImage } | null>(null);
 
   const addToast = useCallback((toast: Omit<ToastInfo, 'id'>) => {
     const newToast = { ...toast, id: Date.now() };
@@ -128,7 +127,7 @@ const App: React.FC = () => {
   };
 
   const handleUseAsInput = useCallback((tool: ToolTab, image: GeneratedImage) => {
-    setRecreationData(image);
+    setRecreationData({ tool, image });
     setActiveTab(tool);
   }, []);
 
@@ -158,16 +157,16 @@ const App: React.FC = () => {
             <main className="flex-1 flex flex-col overflow-y-auto">
               <div className="w-full h-full">
                 <div hidden={activeTab !== 'ads'} className="w-full h-full">
-                  <AdGeneratorTab addToast={addToast} addImagesToLibrary={addImagesToLibrary} initialImage={recreationData} onDone={clearRecreationData} onUseAsInput={handleUseAsInput} />
+                  <AdGeneratorTab addToast={addToast} addImagesToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'ads' ? recreationData.image : undefined} onDone={clearRecreationData} onUseAsInput={handleUseAsInput} />
                 </div>
                 <div hidden={activeTab !== 'editor'} className="w-full h-full">
-                  <EditorTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData} onDone={clearRecreationData} />
+                  <EditorTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'editor' ? recreationData.image : undefined} onDone={clearRecreationData} />
                 </div>
                 <div hidden={activeTab !== 'upscaler'} className="w-full h-full">
-                  <UpscalerTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData} onDone={clearRecreationData} />
+                  <UpscalerTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'upscaler' ? recreationData.image : undefined} onDone={clearRecreationData} />
                 </div>
                 <div hidden={activeTab !== 'blender'} className="w-full h-full">
-                  <BlenderTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData} onDone={clearRecreationData} />
+                  <BlenderTab addToast={addToast} addImageToLibrary={addImagesToLibrary} initialImage={recreationData?.tool === 'blender' ? recreationData.image : undefined} onDone={clearRecreationData} />
                 </div>
                 <div hidden={activeTab !== 'library'} className="w-full h-full">
                   <LibraryTab library={library} onUseAsInput={handleUseAsInput} />

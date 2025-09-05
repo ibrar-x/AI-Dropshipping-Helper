@@ -16,7 +16,7 @@ interface ImageUpscalerProps {
 
 const RadioButton: React.FC<{ label: string; value: string | number; checked: boolean; onChange: (value: any) => void; name: string; }> = ({ label, value, checked, onChange, name }) => (
   <label className="flex items-center space-x-2 cursor-pointer">
-    <input type="radio" name={name} value={value} checked={checked} onChange={e => onChange(e.target.value)} className="hidden" />
+    <input type="radio" name={name} value={String(value)} checked={checked} onChange={e => onChange(e.target.value)} className="hidden" />
     <span className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${checked ? 'bg-brand-primary text-white' : 'bg-dark-input hover:bg-dark-border'}`}>
       {label}
     </span>

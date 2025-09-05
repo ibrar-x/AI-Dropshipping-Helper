@@ -2,8 +2,8 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { GeneratedImage, AdBrief, ToastInfo, AdCreativeState, ToolTab } from '../../types';
 import ImageUploader from '../ImageUploader';
-import { createThumbnail, dataURLtoBase64, downloadImage, ensureSupportedImageFormat } from '../../utils/imageUtils';
-import { generateAdImage, generateAdCopy, removeBackground, editLogo, enhancePromptStream, suggestVisualPrompts } from '../../services/geminiService';
+import { createThumbnail, downloadImage } from '../../utils/imageUtils';
+import { generateAdImage, generateAdCopy, enhancePromptStream, suggestVisualPrompts, generatePlatformContentStream } from '../../services/geminiService';
 import { PaperclipIcon } from '../icons/PaperclipIcon';
 import { RefreshIcon } from '../icons/RefreshIcon';
 import { XIcon } from '../icons/XIcon';
@@ -17,10 +17,9 @@ import { DownloadIcon } from '../icons/DownloadIcon';
 import PlatformContentGenerator from '../PlatformContentGenerator';
 import { PhotoIcon } from '../icons/PhotoIcon';
 import { ChatIcon } from '../icons/ChatIcon';
-import { BookIcon } from '../icons/BookIcon';
-import { UpscaleIcon } from '../icons/UpscaleIcon';
-import Loader from '../Loader';
 import ToggleSwitch from '../ToggleSwitch';
+// FIX: Import `UpscaleIcon` to resolve "Cannot find name 'UpscaleIcon'" error.
+import { UpscaleIcon } from '../icons/UpscaleIcon';
 
 interface AdGeneratorTabProps {
     addToast: (toast: Omit<ToastInfo, 'id'>) => void;
@@ -186,6 +185,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     const [visualPrompts, setVisualPrompts] = useState<string[]>(Array(2).fill(''));
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState<number | null>(null);
+    const [styleReferenceImage, setStyleReferenceImage] = useState<File | null>(null);
 
     const [platforms, setPlatforms] = useState<string[]>(INITIAL_PLATFORMS);
     const [platform, setPlatform] = useState(INITIAL_PLATFORMS[0]);
@@ -208,6 +208,15 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
     const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
     const [pendingEdit, setPendingEdit] = useState<{ index: number; dataUrl: string } | null>(null);
+    
+    // State for Ad Copy
+    const [adCopyHtml, setAdCopyHtml] = useState('');
+    const [isGeneratingAdCopy, setIsGeneratingAdCopy] = useState(true);
+
+    // State for Platform Content
+    const [platformGeneratedContent, setPlatformGeneratedContent] = useState('');
+    const [isGeneratingPlatformContent, setIsGeneratingPlatformContent] = useState(false);
+
 
     const handlePlacementStateChange = useCallback((newState: Partial<AdCreativeState>) => {
         setPlacementCreativeState(prevState => ({ ...prevState, ...newState }));
@@ -233,6 +242,11 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         setProcessingMessage('');
         setViewingImageSrc(null);
         setResultsView('creatives');
+        setStyleReferenceImage(null);
+        setAdCopyHtml('');
+        setIsGeneratingAdCopy(true);
+        setPlatformGeneratedContent('');
+        setIsGeneratingPlatformContent(false);
     }
 
     const handleImageUpload = useCallback(async (image: GeneratedImage) => {
@@ -286,6 +300,22 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
             setIsProcessing(false);
         }
     }, [addToast]);
+    
+    const handleStyleReferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 4 * 1024 * 1024) { // 4MB limit for Gemini
+                addToast({
+                    title: 'Image Too Large',
+                    message: 'Please select an image smaller than 4MB.',
+                    type: 'error',
+                });
+                e.target.value = ''; // Clear the input
+                return;
+            }
+            setStyleReferenceImage(file);
+        }
+    };
 
     const handleSuggestPrompts = async () => {
         if (!imageWithPlacements || isLoadingSuggestions) return;
@@ -295,7 +325,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
             const res = await fetch(imageWithPlacements.src);
             const blob = await res.blob();
             const imageFile = new File([blob], "product.png", { type: blob.type });
-            const suggestions = await suggestVisualPrompts(imageFile, numVariations);
+            const suggestions = await suggestVisualPrompts(imageFile, numVariations, styleReferenceImage || undefined);
             
             const finalSuggestions = Array(numVariations).fill('');
              for (let i = 0; i < numVariations; i++) {
@@ -400,6 +430,9 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         }
         if (logoFile) {
             referenceInputs.push(logoFile);
+        }
+        if (styleReferenceImage) {
+            referenceInputs.push(styleReferenceImage);
         }
         
         const allResults: GeneratedImage[] = [];
@@ -511,6 +544,62 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
         product: { ...initialAdBrief.product, name: productTopic || 'Product', benefits: placementCreativeState.headline },
         visuals: { ...initialAdBrief.visuals, onImageText: placementCreativeState.headline }
     }), [platform, placementCreativeState, productTopic]);
+    
+    useEffect(() => {
+        if (step !== 'RESULTS') return;
+
+        const generate = async () => {
+            setIsGeneratingAdCopy(true);
+            setAdCopyHtml('');
+            try {
+                const stream = generateAdCopy(briefForAdCopy);
+                let fullText = '';
+                for await (const chunk of stream) {
+                    fullText += chunk;
+                    setAdCopyHtml(fullText);
+                }
+            } catch (error) {
+                console.error("Ad copy generation failed", error);
+                setAdCopyHtml("<p>Sorry, there was an error generating the ad copy.</p>");
+            } finally {
+                setIsGeneratingAdCopy(false);
+            }
+        };
+
+        generate();
+    }, [step, briefForAdCopy]);
+
+    const handleGeneratePlatformContent = useCallback(async (prompt: string) => {
+        setIsGeneratingPlatformContent(true);
+        setPlatformGeneratedContent('');
+        try {
+            const stream = generatePlatformContentStream(platform, briefForAdCopy, prompt);
+            let fullText = '';
+            for await (const chunk of stream) {
+                fullText += chunk;
+                setPlatformGeneratedContent(fullText);
+            }
+        } catch (error) {
+            console.error("Platform content generation error:", error);
+            addToast({
+                title: 'Content Generation Failed',
+                message: error instanceof Error ? error.message : 'Could not generate platform-specific content.',
+                type: 'error'
+            });
+        } finally {
+            setIsGeneratingPlatformContent(false);
+        }
+    }, [platform, briefForAdCopy, addToast]);
+
+    const adCopyContent = useMemo(() => <AdCopyDisplay htmlContent={adCopyHtml} isLoading={isGeneratingAdCopy} />, [adCopyHtml, isGeneratingAdCopy]);
+    const platformContent = useMemo(() => <PlatformContentGenerator
+        platform={platform}
+        brief={briefForAdCopy}
+        addToast={addToast}
+        generatedContent={platformGeneratedContent}
+        isLoading={isGeneratingPlatformContent}
+        onGenerate={handleGeneratePlatformContent}
+    />, [platform, briefForAdCopy, addToast, platformGeneratedContent, isGeneratingPlatformContent, handleGeneratePlatformContent]);
 
     const handleDownloadFinalCreative = (image: GeneratedImage) => {
         setIsDownloading(image.id);
@@ -657,6 +746,23 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                                         <input type="number" min="1" max="8" value={numVariations} onChange={e => setNumVariations(parseInt(e.target.value, 10) || 1)} className="w-full text-sm rounded-lg border-dark-border bg-dark-input p-2" />
                                     </div>
                                 </div>
+
+                                <div className="bg-dark-surface p-3 rounded-lg border border-dark-border">
+                                    <label className="font-semibold text-sm block mb-2 text-dark-text-secondary">Style Reference (Optional)</label>
+                                    <p className="text-xs text-dark-text-secondary mb-2">Upload an image to influence the style and composition of the generated visuals.</p>
+                                    <div className="flex items-center gap-2">
+                                        <label htmlFor="style-ref-upload" className="flex-1 cursor-pointer bg-dark-input border border-dark-border rounded-md py-1.5 px-2.5 text-sm font-medium text-dark-text-secondary hover:bg-dark-border flex items-center gap-2">
+                                            <PaperclipIcon className="w-4 h-4" />
+                                            <span className="truncate">{styleReferenceImage?.name ?? 'Upload style reference'}</span>
+                                        </label>
+                                        <input id="style-ref-upload" type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleStyleReferenceChange} />
+                                        {styleReferenceImage && (
+                                            <button onClick={() => setStyleReferenceImage(null)} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Remove style reference">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                                 
                                 <div className="space-y-4">
                                     {visualPrompts.map((prompt, index) => (
@@ -731,9 +837,6 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ addToast, addImagesToLi
                     );
                 }
             
-                const adCopyContent = useMemo(() => <AdCopyDisplay brief={briefForAdCopy} />, [briefForAdCopy]);
-                const platformContent = useMemo(() => <PlatformContentGenerator platform={platform} brief={briefForAdCopy} addToast={addToast} />, [platform, briefForAdCopy, addToast]);
-
                 return (
                     <div className="w-full max-w-5xl mx-auto p-4 pt-8 md:p-6 space-y-6">
                         <div className="flex justify-between items-center flex-wrap gap-4">

@@ -1,40 +1,27 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdBrief, ToastInfo } from '../types';
-import { generatePlatformContentStream } from '../services/geminiService';
 import { MagicWandIcon } from './icons/MagicWandIcon';
 
 interface PlatformContentGeneratorProps {
     platform: string;
+    // FIX: Add brief prop to fix type error in AdGeneratorTab.tsx.
     brief: AdBrief;
     addToast: (toast: Omit<ToastInfo, 'id'>) => void;
+    generatedContent: string;
+    isLoading: boolean;
+    onGenerate: (prompt: string) => Promise<void>;
 }
 
-const PlatformContentGenerator: React.FC<PlatformContentGeneratorProps> = ({ platform, brief, addToast }) => {
-    const [prompt, setPrompt] = useState(`Generate an SEO-optimized title and a compelling product description for this product on ${platform}.`);
-    const [generatedContent, setGeneratedContent] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+const PlatformContentGenerator: React.FC<PlatformContentGeneratorProps> = ({ platform, brief, addToast, generatedContent, isLoading, onGenerate }) => {
+    const [prompt, setPrompt] = useState('');
 
-    const handleGenerate = async () => {
-        setIsLoading(true);
-        setGeneratedContent('');
-        try {
-            const stream = generatePlatformContentStream(platform, brief, prompt);
-            let fullText = '';
-            for await (const chunk of stream) {
-                fullText += chunk;
-                setGeneratedContent(fullText);
-            }
-        } catch (error) {
-            console.error("Platform content generation error:", error);
-            addToast({
-                title: 'Content Generation Failed',
-                message: error instanceof Error ? error.message : 'Could not generate platform-specific content.',
-                type: 'error'
-            });
-        } finally {
-            setIsLoading(false);
-        }
+    // FIX: Use useEffect to set a context-aware prompt when props change.
+    useEffect(() => {
+        setPrompt(`Generate an SEO-optimized title and a compelling product description for "${brief.product.name || 'this product'}" on ${platform}.`);
+    }, [platform, brief.product.name]);
+
+    const handleGenerate = () => {
+        onGenerate(prompt);
     };
 
     return (

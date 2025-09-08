@@ -1,11 +1,8 @@
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-// FIX: Correct import path for types.
 import { GeneratedImage, EditLayer, SelectionAnalysis } from '../types';
-// FIX: Correct import path for geminiService.
 import { analyzeSelection, editImageWithMask } from '../services/geminiService';
 import { createHighlightImage } from '../utils/imageUtils';
-// FIX: Correct import path for the Zustand store.
 import { useAppStore } from '../store';
 import { BrushIcon } from './icons/BrushIcon';
 import { LassoIcon } from './icons/LassoIcon';

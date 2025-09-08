@@ -1,6 +1,9 @@
 
 
-import { BlendedImage, ExportBundle } from '../types';
+
+
+
+// FIX: Removed unused 'ExportBundle' type which is not exported from types.
 
 
 export const fileToBase64 = (file: File): Promise<{ base64: string; mimeType: string }> => {
@@ -297,65 +300,4 @@ export const drawWrappedText = (
     }
     currentY += lineHeight;
   }
-};
-
-
-export const createExportBundle = async (
-    konvaStage: any,
-    layers: BlendedImage[],
-    canvasWidth: number,
-    canvasHeight: number
-): Promise<ExportBundle> => {
-
-    // 1. Create Composite PNG
-    const compositePng = konvaStage.toDataURL({
-        pixelRatio: 2 // Higher quality export
-    });
-
-    // 2. Create Guide PNG (downscaled)
-    const guidePng = await createThumbnail(compositePng, 1024, 1024);
-
-    // 3. Create Objects Sheet PNG
-    const objectsSheetCanvas = document.createElement('canvas');
-    const ctx = objectsSheetCanvas.getContext('2d')!;
-    const PADDING = 20;
-    const numObjects = layers.length;
-    const cols = Math.ceil(Math.sqrt(numObjects));
-    const rows = Math.ceil(numObjects / cols);
-    const maxImgWidth = Math.max(...layers.map(l => l.image.width));
-    const maxImgHeight = Math.max(...layers.map(l => l.image.height));
-    const cellWidth = maxImgWidth + PADDING;
-    const cellHeight = maxImgHeight + PADDING;
-    objectsSheetCanvas.width = cols * cellWidth;
-    objectsSheetCanvas.height = rows * cellHeight;
-    ctx.fillStyle = '#808080'; // Mid-gray background
-    ctx.fillRect(0, 0, objectsSheetCanvas.width, objectsSheetCanvas.height);
-
-    layers.forEach((layer, index) => {
-        const row = Math.floor(index / cols);
-        const col = index % cols;
-        const x = col * cellWidth + PADDING / 2;
-        const y = row * cellHeight + PADDING / 2;
-        ctx.drawImage(layer.image, x, y);
-    });
-    const objectsSheetPng = objectsSheetCanvas.toDataURL('image/png');
-
-
-    // 4. Create Metadata JSON
-    const metadata = {
-        canvas: { w: canvasWidth, h: canvasHeight },
-        layers: layers.map(l => ({
-            id: l.id,
-            name: l.name,
-            x: Math.round(l.x),
-            y: Math.round(l.y),
-            scale: parseFloat(l.scale.toFixed(3)),
-            rotation: Math.round(l.rotation),
-            z: l.zIndex,
-            width: l.width,
-            height: l.height
-        }))
-    };
-    
-    return { compositePng, guidePng, objectsSheetPng, metadata };
 };

@@ -1,12 +1,8 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-// FIX: Correct import path for the Zustand store.
 import { useAppStore } from '../../store';
-// FIX: Correct import path for types.
-// FIX: Add LibraryImage to imports
 import { GeneratedImage, AdBrief, AdCreativeState, LibraryImage } from '../../types';
 import ImageUploader from '../ImageUploader';
 import { createThumbnail, downloadImage } from '../../utils/imageUtils';
-// FIX: Correct import path for geminiService.
 import { generateAdImage, generateAdCopy, enhancePromptStream, suggestVisualPrompts, generatePlatformContentStream } from '../../services/geminiService';
 import { PaperclipIcon } from '../icons/PaperclipIcon';
 import { RefreshIcon } from '../icons/RefreshIcon';
@@ -17,7 +13,6 @@ import { BrushIcon } from '../icons/BrushIcon';
 import { MagicWandIcon } from '../icons/MagicWandIcon';
 import AdCopyDisplay from '../AdCopyDisplay';
 import { DownloadIcon } from '../icons/DownloadIcon';
-// FIX: Correct import path for PlatformContentGenerator component.
 import PlatformContentGenerator from '../PlatformContentGenerator';
 import { PhotoIcon } from '../icons/PhotoIcon';
 import { ChatIcon } from '../icons/ChatIcon';
@@ -500,7 +495,6 @@ ${placementInstructions}`;
     };
 
     
-    // FIX: Replaced the direct-save logic with a flow that uses a confirmation modal.
     const handleSaveEditedFinalCreative = useCallback((finalImageDataUrl: string) => {
         if (editingFinalCreativeIndex === null) return;
         const sourceImage = finalCreatives[editingFinalCreativeIndex];
@@ -509,7 +503,6 @@ ${placementInstructions}`;
         setEditingFinalCreativeIndex(null);
     }, [editingFinalCreativeIndex, finalCreatives]);
 
-    // FIX: Added the missing function to resolve the user's choice from the confirmation modal.
     const resolvePendingEdit = useCallback(async (action: 'replace' | 'copy') => {
         if (!pendingEdit) return;
         

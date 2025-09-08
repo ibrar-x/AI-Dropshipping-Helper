@@ -1,7 +1,6 @@
 
 
 import React from 'react';
-// FIX: Correct import path for types.
 import { AdCreativeState, AdTemplate } from './types';
 import { drawWrappedText } from './utils/imageUtils';
 import { TemplateStandardIcon } from './components/icons/TemplateStandardIcon';
@@ -116,8 +115,6 @@ const drawTextElements = (
 
         rects.cta = new DOMRectReadOnly(ctaX, ctaY, ctaWidth, ctaHeight);
     }
-
-    // FIX: Added return statement to satisfy the function's declared return type.
     return rects;
 };
 
@@ -144,7 +141,6 @@ const drawStandardTemplate: DrawFunction = (ctx, canvas, state, logoImg) => {
     };
 };
 
-// FIX: Export the adTemplates array so it can be imported by other modules.
 export const adTemplates: AdTemplate[] = [
     {
         id: 'standard-v1',

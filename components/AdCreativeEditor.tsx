@@ -1,6 +1,5 @@
 
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-// FIX: Correct import path for types.
 import { AdCreativeState, GeneratedImage } from '../types';
 import { adTemplates } from '../adTemplates';
 

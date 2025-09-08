@@ -1,4 +1,8 @@
+
 // types.ts
+// FIX: Import `HarmCategory` and `HarmBlockThreshold` to make them available in this module, then re-export them.
+import { HarmCategory, HarmBlockThreshold } from '@google/genai';
+export { HarmCategory, HarmBlockThreshold };
 
 export interface GeneratedImage {
   id: string;
@@ -60,7 +64,7 @@ export interface GenerationOptionsProps extends BaseGenerationOptionsProps {
     onStartAdCreation: (image: GeneratedImage) => void;
 }
 
-export type ToolTab = 'library' | 'ads' | 'visuals' | 'editor' | 'upscaler' | 'blender';
+export type ToolTab = 'library' | 'ads' | 'visuals' | 'editor' | 'upscaler' | 'ebay';
 
 export interface ToastInfo {
   id: number;
@@ -201,42 +205,6 @@ export interface AdTemplate {
     } | void;
 }
 
-// For Image Blender
-export interface BlendedImage {
-    id: string;
-    name: string;
-    image: HTMLImageElement;
-    x: number;
-    y: number;
-    scale: number;
-    rotation: number;
-    opacity: number;
-    zIndex: number;
-    width: number;
-    height: number;
-}
-export interface LayerMetadata {
-    id: string;
-    name: string;
-    x: number;
-    y: number;
-    scale: number;
-    rotation: number;
-    z: number;
-    width: number;
-    height: number;
-}
-export interface ExportBundle {
-    compositePng: string;
-    guidePng: string;
-    objectsSheetPng: string;
-    metadata: {
-        canvas: { w: number, h: number };
-        layers: LayerMetadata[];
-    }
-}
-
-
 // For Prompts
 export interface Prompts {
   [key: string]: string;
@@ -252,9 +220,22 @@ export interface LibrarySelectionConfig {
 export type ModelType = 'text' | 'visual' | 'edit' | 'upscale';
 export type ModelConfig = Record<ModelType, string>;
 
-// FIX: Expanded HarmCategory to include all possible values from the genai SDK to ensure type compatibility.
-export type HarmCategory = 'HARM_CATEGORY_HARASSMENT' | 'HARM_CATEGORY_HATE_SPEECH' | 'HARM_CATEGORY_SEXUALLY_EXPLICIT' | 'HARM_CATEGORY_DANGEROUS_CONTENT' | 'HARM_CATEGORY_UNSPECIFIED' | 'HARM_CATEGORY_DEROGATORY' | 'HARM_CATEGORY_TOXICITY' | 'HARM_CATEGORY_VIOLENCE' | 'HARM_CATEGORY_SEXUAL' | 'HARM_CATEGORY_MEDICAL' | 'HARM_CATEGORY_DANGEROUS';
+// FIX: Replaced local type definitions with imports from @google/genai to ensure type compatibility.
+/*
+export type HarmCategory =
+  | 'HARM_CATEGORY_UNSPECIFIED'
+  | 'HARM_CATEGORY_DEROGATORY'
+  | 'HARM_CATEGORY_TOXICITY'
+  | 'HARM_CATEGORY_VIOLENCE'
+  | 'HARM_CATEGORY_SEXUAL'
+  | 'HARM_CATEGORY_MEDICAL'
+  | 'HARM_CATEGORY_DANGEROUS'
+  | 'HARM_CATEGORY_HARASSMENT'
+  | 'HARM_CATEGORY_HATE_SPEECH'
+  | 'HARM_CATEGORY_SEXUALLY_EXPLICIT'
+  | 'HARM_CATEGORY_DANGEROUS_CONTENT';
 export type HarmBlockThreshold = 'BLOCK_NONE' | 'BLOCK_ONLY_HIGH' | 'BLOCK_LOW_AND_ABOVE' | 'BLOCK_MEDIUM_AND_ABOVE';
+*/
 
 export interface SafetySetting {
     category: HarmCategory;
@@ -269,4 +250,27 @@ export interface SharedImageData {
   width: number;
   height: number;
   createdAt: number;
+}
+
+// For eBay Integration
+export interface EbayAuthTokens {
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiry: number; // Timestamp
+    refreshTokenExpiry: number; // Timestamp
+}
+
+export interface EbayAccountInfo {
+    username: string;
+}
+
+export interface EbayListing {
+    offerId: string;
+    listingId?: string;
+    sku: string;
+    status: 'PUBLISHED' | 'UNPUBLISHED' | 'SOLD';
+    title: string;
+    price: string;
+    imageUrl?: string;
+    listingUrl?: string;
 }

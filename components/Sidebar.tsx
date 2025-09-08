@@ -11,9 +11,9 @@ import { SettingsIcon } from './icons/SettingsIcon';
 import { MegaphoneIcon } from './icons/MegaphoneIcon';
 import { BrushIcon } from './icons/BrushIcon';
 import { UpscaleIcon } from './icons/UpscaleIcon';
-import { BlenderIcon } from './icons/BlenderIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { MagicWandIcon } from './icons/MagicWandIcon';
+import { EbayIcon } from './icons/EbayIcon';
 
 const tools: { id: ToolTab; name: string; icon: JSX.Element }[] = [
   { id: 'library', name: 'Library', icon: <PhotoIcon className="w-5 h-5" /> },
@@ -21,7 +21,7 @@ const tools: { id: ToolTab; name: string; icon: JSX.Element }[] = [
   { id: 'visuals', name: 'Visual Generator', icon: <MagicWandIcon className="w-5 h-5" /> },
   { id: 'editor', name: 'Image Editor', icon: <BrushIcon className="w-5 h-5" /> },
   { id: 'upscaler', name: 'Image Upscaler', icon: <UpscaleIcon className="w-5 h-5" /> },
-  { id: 'blender', name: 'Image Blender', icon: <BlenderIcon className="w-5 h-5" /> },
+  { id: 'ebay', name: 'eBay Listings', icon: <EbayIcon className="w-5 h-5" /> },
 ];
 
 const Sidebar: React.FC = () => {

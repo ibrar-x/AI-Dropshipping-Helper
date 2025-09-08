@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store';
 import { XIcon } from './icons/XIcon';
@@ -5,6 +6,7 @@ import { Prompts, ModelConfig, SafetySetting, ModelType, HarmCategory, HarmBlock
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
+import { EbayIcon } from './icons/EbayIcon';
 
 const PREDEFINED_MODELS: Record<ModelType, { value: string; label: string; }[]> = {
     text: [{ value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Recommended)' }],
@@ -33,6 +35,10 @@ const SettingsModal: React.FC = () => {
         modelConfig: currentModelConfig,
         safetySettings: currentSafetySettings,
         customApiKey: currentCustomApiKey,
+        isEbayConnected,
+        ebayAccountInfo,
+        connectEbay,
+        disconnectEbay,
         closeSettings,
         saveSettings,
         clearData
@@ -43,7 +49,7 @@ const SettingsModal: React.FC = () => {
     const [safetySettings, setSafetySettings] = useState(currentSafetySettings);
     const [customApiKey, setCustomApiKey] = useState(currentCustomApiKey);
     
-    const [openSection, setOpenSection] = useState('api');
+    const [openSection, setOpenSection] = useState('integrations');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,7 +159,30 @@ const SettingsModal: React.FC = () => {
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-4">
-                     <CollapsibleSection title="API & Billing" isOpen={openSection === 'api'} onToggle={() => setOpenSection(openSection === 'api' ? '' : 'api')}>
+                     <CollapsibleSection title="Integrations" isOpen={openSection === 'integrations'} onToggle={() => setOpenSection(openSection === 'integrations' ? '' : 'integrations')}>
+                        <div className="flex items-center justify-between bg-dark-input p-4 rounded-lg border border-dark-border">
+                            <div className="flex items-center gap-3">
+                                <EbayIcon className="w-10 h-10" />
+                                <div>
+                                    <p className="font-bold">eBay</p>
+                                    <p className="text-sm text-dark-text-secondary">
+                                        {isEbayConnected ? `Connected as ${ebayAccountInfo?.username || 'user'}` : 'Manage your listings.'}
+                                    </p>
+                                </div>
+                            </div>
+                            {isEbayConnected ? (
+                                <button onClick={disconnectEbay} className="px-4 py-2 text-sm font-semibold bg-dark-border text-dark-text-primary rounded-md hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-400 transition-colors">
+                                    Disconnect
+                                </button>
+                            ) : (
+                                <button onClick={connectEbay} className="px-4 py-2 text-sm font-semibold bg-brand-primary text-white rounded-md hover:bg-brand-secondary transition-colors">
+                                    Connect
+                                </button>
+                            )}
+                        </div>
+                    </CollapsibleSection>
+                
+                    <CollapsibleSection title="API & Billing" isOpen={openSection === 'api'} onToggle={() => setOpenSection(openSection === 'api' ? '' : 'api')}>
                         <div>
                             <label htmlFor="api-key-input" className="font-semibold text-sm">Your Google AI API Key</label>
                             <p className="text-xs text-dark-text-secondary mb-2">Your key is stored securely in your browser's local storage and never sent to our servers.</p>

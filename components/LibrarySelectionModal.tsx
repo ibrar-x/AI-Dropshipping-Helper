@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-// FIX: Changed GeneratedImage to LibraryImage to match the type expected by the onSelect callback.
 import { LibraryImage } from '../types';
 import { XIcon } from './icons/XIcon';
 import { CheckIcon } from './icons/CheckIcon';

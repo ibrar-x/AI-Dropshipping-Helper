@@ -1,7 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-// FIX: Correct import path for the Zustand store.
 import { useAppStore } from '../../store';
-// FIX: Correct import path for types.
 import { GeneratedImage, LibraryImage } from '../../types';
 import { createThumbnail } from '../../utils/imageUtils';
 import ImageUploader from '../ImageUploader';

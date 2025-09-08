@@ -1,4 +1,3 @@
-// FIX: Add useRef to the import list from React.
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store';
 import { LibraryImage, Folder } from '../../types';
@@ -19,7 +18,6 @@ import { MoreVerticalIcon } from '../icons/MoreVerticalIcon';
 import { TrashIcon } from '../icons/TrashIcon';
 import { PencilIcon } from '../icons/PencilIcon';
 import ImageDetailModal from '../library/ImageDetailModal';
-// FIX: Import the missing CheckIcon component.
 import { CheckIcon } from '../icons/CheckIcon';
 
 // Simplified Popover for Folder actions

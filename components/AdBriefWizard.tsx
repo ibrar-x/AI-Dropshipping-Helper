@@ -1,7 +1,6 @@
 
 
 import React, { useState, useEffect } from 'react';
-// FIX: Correct import path for types.
 import { AdBrief, AdBriefWizardState } from '../types';
 import { PaperclipIcon } from './icons/PaperclipIcon';
 import { MagicWandIcon } from './icons/MagicWandIcon';
@@ -116,7 +115,6 @@ const AdBriefWizard: React.FC<AdBriefWizardProps> = ({ wizardState, onGenerate, 
     });
   };
 
-  // FIX: Rewrote the function to be type-safe and correctly handle nested paths.
   const handleCheckboxChange = (path: string, value: string) => {
     const keys = path.split('.');
     

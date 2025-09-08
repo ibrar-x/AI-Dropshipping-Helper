@@ -12,6 +12,8 @@ import { PencilIcon } from '../icons/PencilIcon';
 import { ShareIcon } from '../icons/ShareIcon';
 import { CopyIcon } from '../icons/CopyIcon';
 import { CheckIcon } from '../icons/CheckIcon';
+import { EbayIcon } from '../icons/EbayIcon';
+import EbayListingModal from '../EbayListingModal';
 
 interface ImageDetailModalProps {
     imageId: string;
@@ -63,7 +65,7 @@ const ShareLinkModal: React.FC<{ link: string; onClose: () => void; }> = ({ link
 
 
 const ImageDetailModal: React.FC<ImageDetailModalProps> = ({ imageId, onClose }) => {
-    const { library, updateImage, useAsInput, addToast } = useAppStore();
+    const { library, updateImage, useAsInput, addToast, isEbayConnected } = useAppStore();
     const image = useMemo(() => library.find(img => img.id === imageId), [imageId, library]);
 
     const [notes, setNotes] = useState('');
@@ -72,6 +74,7 @@ const ImageDetailModal: React.FC<ImageDetailModalProps> = ({ imageId, onClose })
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [exportFormat, setExportFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
     const [shareLink, setShareLink] = useState<string | null>(null);
+    const [isCreatingEbayListing, setIsCreatingEbayListing] = useState(false);
 
     useEffect(() => {
         if (image) {
@@ -153,7 +156,7 @@ const ImageDetailModal: React.FC<ImageDetailModalProps> = ({ imageId, onClose })
                             <h2 className="text-lg font-bold truncate">Details</h2>
                             <button onClick={onClose} className="p-1 rounded-full hover:bg-dark-input"><XIcon className="w-5 h-5" /></button>
                         </header>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
                             <MetaField label="Created">
                                 {new Date(image.createdAt).toLocaleString()}
                             </MetaField>
@@ -200,16 +203,17 @@ const ImageDetailModal: React.FC<ImageDetailModalProps> = ({ imageId, onClose })
 
                         </div>
                         <footer className="p-4 border-t border-dark-border bg-dark-surface flex-shrink-0 space-y-3">
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleGenerateShareLink} className="flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md w-1/4"><ShareIcon className="w-4 h-4" /></button>
+                             <div className="flex items-center gap-2">
                                 <button onClick={() => handleUseAsInput('ads')} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md"><MegaphoneIcon className="w-4 h-4" /> <span>Ad</span></button>
                                 <button onClick={() => handleUseAsInput('editor')} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md"><BrushIcon className="w-4 h-4" /> <span>Edit</span></button>
                                 <button onClick={() => handleUseAsInput('upscaler')} className="flex-1 flex items-center justify-center gap-2 bg-dark-input hover:bg-dark-border text-dark-text-primary text-sm font-semibold px-3 py-2 rounded-md"><UpscaleIcon className="w-4 h-4" /> <span>Upscale</span></button>
-                                <button onClick={handleToggleFavorite} className={`p-2 rounded-md ${image.isFavorite ? 'bg-red-500/20 text-red-400' : 'bg-dark-input hover:bg-dark-border'}`}>
+                            </div>
+                             <div className="flex items-center gap-2">
+                                <button onClick={handleGenerateShareLink} className="p-2.5 bg-dark-input hover:bg-dark-border rounded-md" title="Share"><ShareIcon className="w-5 h-5"/></button>
+                                {isEbayConnected && <button onClick={() => setIsCreatingEbayListing(true)} className="p-2.5 bg-dark-input hover:bg-dark-border rounded-md" title="Export to eBay"><EbayIcon className="w-5 h-5"/></button>}
+                                <button onClick={handleToggleFavorite} className={`p-2.5 rounded-md ${image.isFavorite ? 'bg-red-500/20 text-red-400' : 'bg-dark-input hover:bg-dark-border'}`} title="Favorite">
                                     <HeartIcon className="w-5 h-5"/>
                                 </button>
-                            </div>
-                            <div className="flex items-center gap-2">
                                 <select value={exportFormat} onChange={e => setExportFormat(e.target.value as any)} className="text-sm bg-dark-input border border-dark-border rounded-md p-2.5">
                                     <option value="jpeg">JPG</option>
                                     <option value="png">PNG</option>
@@ -224,6 +228,7 @@ const ImageDetailModal: React.FC<ImageDetailModalProps> = ({ imageId, onClose })
                 </div>
             </div>
             {shareLink && <ShareLinkModal link={shareLink} onClose={() => setShareLink(null)} />}
+            {isCreatingEbayListing && <EbayListingModal image={image} onClose={() => setIsCreatingEbayListing(false)} />}
         </>
     );
 };

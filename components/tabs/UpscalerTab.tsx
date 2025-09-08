@@ -1,8 +1,6 @@
 
 import React, { useEffect } from 'react';
-// FIX: Correct import path for the Zustand store.
 import { useAppStore } from '../../store';
-// FIX: Correct import path for types.
 import { GeneratedImage } from '../../types';
 import ImageUploader from '../ImageUploader';
 

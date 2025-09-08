@@ -1,7 +1,6 @@
 
 
 import React, { useState, useEffect } from 'react';
-// FIX: Correct import path for types.
 import { GenerationPayload, CreativeOptions, GeneratedImage, GenerationOptionsProps as BaseGenerationOptionsProps } from '../types';
 import { PaperclipIcon } from './icons/PaperclipIcon';
 import { MegaphoneIcon } from './icons/MegaphoneIcon';
@@ -76,7 +75,6 @@ const GenerationOptions: React.FC<GenerationOptionsProps> = ({ productDescriptio
     if (creativeOptions && Object.keys(creativeOptions).length > 0) {
         setSelections(prev => {
             const initialSelections = { ...prev };
-            // FIX: Removed 'Camera Angle' and 'Lens & Focus' as they are not valid keys of CreativeOptions
             const categoriesToPreselect: (keyof CreativeOptions)[] = ['Style'];
             
             categoriesToPreselect.forEach(category => {

@@ -1,19 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
-// FIX: Correct import path for the Zustand store.
 import { useAppStore } from './store';
 import Sidebar from './components/Sidebar';
 import ToastContainer from './components/ToastContainer';
 import { MenuIcon } from './components/icons/MenuIcon';
-// FIX: Correct import path for SettingsModal component.
 import SettingsModal from './components/SettingsModal';
-// FIX: Correct import path for geminiService.
 import AdGeneratorTab from './components/tabs/AdGeneratorTab';
 import EditorTab from './components/tabs/EditorTab';
 import UpscalerTab from './components/tabs/UpscalerTab';
 import LibraryTab from './components/tabs/LibraryTab';
-import BlenderTab from './components/tabs/BlenderTab';
 import VisualGeneratorTab from './components/tabs/VisualGeneratorTab';
+import EbayTab from './components/tabs/EbayTab';
 import ImageUpscaler from './components/ImageUpscaler';
 import UpscaleConfirmationModal from './components/UpscaleConfirmationModal';
 import LibrarySelectionModal from './components/LibrarySelectionModal';
@@ -32,6 +29,7 @@ const App: React.FC = () => {
     handleUpscaleSave,
     closeUpscaler,
     resolveUpscaledImage,
+    handleEbayAuthCallback,
   } = useAppStore();
 
   const [sharedImage, setSharedImage] = useState<SharedImageData | null>(null);
@@ -39,6 +37,22 @@ const App: React.FC = () => {
   useEffect(() => {
     initializeApp();
   }, [initializeApp]);
+
+  useEffect(() => {
+    const handleUrlParams = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const state = params.get('state');
+
+        if (code && state === localStorage.getItem('ebay_oauth_state')) {
+            localStorage.removeItem('ebay_oauth_state');
+            await handleEbayAuthCallback(code);
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    };
+    handleUrlParams();
+  }, [handleEbayAuthCallback]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -97,21 +111,20 @@ const App: React.FC = () => {
                 <div hidden={activeTab !== 'upscaler'} className="w-full h-full">
                   <UpscalerTab initialImage={recreationData?.tool === 'upscaler' ? recreationData.image : undefined} />
                 </div>
-                <div hidden={activeTab !== 'blender'} className="w-full h-full">
-                  <BlenderTab initialImage={recreationData?.tool === 'blender' ? recreationData.image : undefined} />
-                </div>
                  <div hidden={activeTab !== 'visuals'} className="w-full h-full">
                   <VisualGeneratorTab />
                 </div>
                 <div hidden={activeTab !== 'library'} className="w-full h-full">
                   <LibraryTab />
                 </div>
+                <div hidden={activeTab !== 'ebay'} className="w-full h-full">
+                  <EbayTab />
+                </div>
               </div>
             </main>
         </div>
       </div>
       {isSettingsOpen && (
-// FIX: The onEnhancePrompt prop does not exist on the SettingsModal component.
         <SettingsModal />
       )}
       {upscalingImage && !pendingUpscaledImage && (

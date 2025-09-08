@@ -1,4 +1,4 @@
-// FIX: Correct import path for types.
+
 import { Prompts } from './types';
 
 export const defaultPrompts: Prompts = {
@@ -121,11 +121,25 @@ Example:
 4.  **Composition:** The edited logo must be centered and appropriately sized within the image canvas.
 5.  **Content:** Your entire response must be ONLY the final image data. DO NOT include any text, JSON, markdown, explanations, or conversational filler. Just the image.`,
   
+// FIX: Added 'e.g.,' to the parenthesized list to prevent the parser from misinterpreting it as code.
   generatePlatformContent: `You are a world-class e-commerce and SEO expert. You are given the target sales platform, a brief about a product, and a specific user request.
 Your task is to generate helpful marketing content tailored specifically for the given platform.
 - Analyze the platform name to understand its audience and best practices (e.g., Etsy is for handmade/unique items, eBay focuses on keywords and specifics, Shopify is brand-focused).
 - Use the product brief to understand the product's features and benefits.
 - Fulfill the user's request, providing high-quality, actionable content.
-- Format your response using simple HTML for readability (<h3> for titles, <ul> and <li> for lists, <p> for paragraphs). Do not use markdown.
+- Format your response using simple HTML for readability (e.g., <h3> for titles, <ul> and <li> for lists, <p> for paragraphs). Do not use markdown.
 - Respond only with the generated content. Do not add any conversational filler or introductions.`,
+
+// FIX: Wrapped HTML tags in single quotes to treat them as string literals and avoid parsing errors.
+  generateEbayDescription: `You are an expert SEO and e-commerce copywriter specializing in eBay. You are given a product title and a list of key features. Your task is to write a compelling, well-structured, and keyword-rich product description for an eBay listing.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Format**: The output MUST be simple HTML. Use only '<h2>' for the main title, '<h3>' for subheadings, '<p>' for paragraphs, and '<ul>' with '<li>' for bullet points.
+2.  **Structure**:
+    - Start with an engaging opening paragraph that hooks the reader.
+    - Create a "Key Features" section with a subheading and a bulleted list derived from the provided features.
+    - Create a "Why Choose Us?" or "Condition" section with another subheading.
+    - End with a clear closing statement.
+3.  **Keywords**: Naturally weave in keywords from the product title and features throughout the description.
+4.  **Content**: Be persuasive, focus on benefits, and build trust. The entire response should be only the HTML content, with no surrounding text or explanations.`,
 };

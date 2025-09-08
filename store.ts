@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import {
@@ -10,6 +11,11 @@ import {
   Prompts,
   ModelConfig,
   SafetySetting,
+  EbayAuthTokens,
+  EbayAccountInfo,
+  // FIX: Import HarmCategory and HarmBlockThreshold enums to use their values.
+  HarmCategory,
+  HarmBlockThreshold,
 } from './types';
 import {
     addImagesToDB,
@@ -26,9 +32,13 @@ import {
 import { createThumbnail, getImageDimensions } from './utils/imageUtils';
 import { defaultPrompts } from './prompts';
 import { encrypt, decrypt } from './utils/crypto';
+import { CLIENT_ID, REDIRECT_URI, SCOPES } from './ebayConfig';
+import { exchangeCodeForTokens, getEbayUser } from './services/ebayService';
 
 const SETTINGS_STORAGE_KEY = 'ai-studio-settings';
 const API_KEY_STORAGE_KEY = 'userApiKey';
+const EBAY_AUTH_STORAGE_KEY = 'ebay-auth-tokens';
+
 
 const loadSettings = (): { prompts: Prompts, modelConfig: ModelConfig, safetySettings: SafetySetting[] } => {
     try {
@@ -40,10 +50,11 @@ const loadSettings = (): { prompts: Prompts, modelConfig: ModelConfig, safetySet
                 prompts: mergedPrompts,
                 modelConfig: parsed.modelConfig || { text: 'gemini-2.5-flash', visual: 'imagen-4.0-generate-001', edit: 'gemini-2.5-flash-image-preview', upscale: 'imagen-v002-upscale' },
                 safetySettings: parsed.safetySettings || [
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                    // FIX: Use enum members instead of string literals for type safety.
+                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
                 ],
             };
         }
@@ -53,11 +64,12 @@ const loadSettings = (): { prompts: Prompts, modelConfig: ModelConfig, safetySet
     return {
         prompts: defaultPrompts,
         modelConfig: { text: 'gemini-2.5-flash', visual: 'imagen-4.0-generate-001', edit: 'gemini-2.5-flash-image-preview', upscale: 'imagen-v002-upscale' },
+        // FIX: Use enum members instead of string literals for type safety.
         safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         ],
     };
 };
@@ -85,6 +97,10 @@ interface AppState {
   modelConfig: ModelConfig;
   safetySettings: SafetySetting[];
   customApiKey: string;
+  // eBay State
+  isEbayConnected: boolean;
+  ebayAuthTokens: EbayAuthTokens | null;
+  ebayAccountInfo: EbayAccountInfo | null;
 }
 
 interface AppActions {
@@ -119,6 +135,10 @@ interface AppActions {
   // Settings Actions
   saveSettings: (settings: { newPrompts?: Prompts, newModelConfig?: ModelConfig, newSafetySettings?: SafetySetting[], newCustomApiKey?: string }) => void;
   clearData: () => void;
+  // eBay Actions
+  connectEbay: () => void;
+  disconnectEbay: () => void;
+  handleEbayAuthCallback: (code: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -141,12 +161,35 @@ export const useAppStore = create<AppState & AppActions>()(
     modelConfig: initialSettings.modelConfig,
     safetySettings: initialSettings.safetySettings,
     customApiKey: decrypt(localStorage.getItem(API_KEY_STORAGE_KEY) || ''),
+    isEbayConnected: false,
+    ebayAuthTokens: null,
+    ebayAccountInfo: null,
 
     // ACTIONS
     initializeApp: async () => {
       const [images, folders] = await Promise.all([getImagesFromDB(), getFoldersFromDB()]);
       const customApiKey = decrypt(localStorage.getItem(API_KEY_STORAGE_KEY) || '');
-      set({ library: images, folders, customApiKey });
+      const ebayAuthRaw = localStorage.getItem(EBAY_AUTH_STORAGE_KEY);
+      const updates: Partial<AppState> = { library: images, folders, customApiKey };
+      if (ebayAuthRaw) {
+          try {
+            const tokens = JSON.parse(decrypt(ebayAuthRaw)) as EbayAuthTokens;
+            if (tokens.accessToken && tokens.refreshToken) {
+                updates.ebayAuthTokens = tokens;
+                updates.isEbayConnected = true;
+                // Fetch user info silently on init
+                getEbayUser().then(userInfo => {
+                    if (userInfo) set({ ebayAccountInfo: userInfo });
+                }).catch(() => {
+                    // Could be expired token, let user handle it.
+                });
+            }
+          } catch(e) {
+              console.error("Failed to parse eBay auth tokens", e);
+              localStorage.removeItem(EBAY_AUTH_STORAGE_KEY);
+          }
+      }
+      set(updates);
     },
     selectTab: (tab) => set({ activeTab: tab, isSidebarOpen: false }),
     setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
@@ -329,7 +372,48 @@ export const useAppStore = create<AppState & AppActions>()(
             await clearFoldersFromDB();
             localStorage.removeItem(SETTINGS_STORAGE_KEY);
             localStorage.removeItem(API_KEY_STORAGE_KEY);
+            localStorage.removeItem(EBAY_AUTH_STORAGE_KEY);
             window.location.reload();
+        }
+    },
+    connectEbay: () => {
+        // Generate a random string for the state parameter to prevent CSRF attacks
+        const state = Math.random().toString(36).substring(2);
+        localStorage.setItem('ebay_oauth_state', state);
+
+        const params = new URLSearchParams({
+            client_id: CLIENT_ID,
+            response_type: 'code',
+            redirect_uri: REDIRECT_URI,
+            scope: SCOPES.join(' '),
+            state: state,
+        });
+
+        const authUrl = `https://auth.ebay.com/oauth2/authorize?${params.toString()}`;
+        window.location.href = authUrl;
+    },
+    disconnectEbay: () => {
+        localStorage.removeItem(EBAY_AUTH_STORAGE_KEY);
+        set({ isEbayConnected: false, ebayAuthTokens: null, ebayAccountInfo: null });
+        get().addToast({ title: 'eBay Disconnected', message: 'Your eBay account has been disconnected.', type: 'info' });
+    },
+    handleEbayAuthCallback: async (code: string) => {
+        get().addToast({ title: 'Connecting to eBay...', message: 'Authorizing your account, please wait.', type: 'info' });
+        try {
+            const tokens = await exchangeCodeForTokens(code);
+            const encryptedTokens = encrypt(JSON.stringify(tokens));
+            localStorage.setItem(EBAY_AUTH_STORAGE_KEY, encryptedTokens);
+            set({ ebayAuthTokens: tokens, isEbayConnected: true });
+
+            const userInfo = await getEbayUser();
+            if (userInfo) {
+                set({ ebayAccountInfo: userInfo });
+                get().addToast({ title: 'eBay Connected!', message: `Successfully connected as ${userInfo.username}.`, type: 'success' });
+            }
+        } catch (error) {
+            console.error("eBay auth failed", error);
+            get().addToast({ title: 'eBay Connection Failed', message: error instanceof Error ? error.message : "Could not connect to eBay.", type: 'error' });
+            set({ isEbayConnected: false, ebayAuthTokens: null, ebayAccountInfo: null });
         }
     },
   }))

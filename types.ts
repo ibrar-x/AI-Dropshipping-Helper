@@ -46,6 +46,7 @@ export interface BrandKit {
   name: string;
   createdAt: number;
   items: BrandKitItem[];
+  primaryColor?: string;
 }
 
 

@@ -300,6 +300,7 @@ export const useAppStore = create<AppState & AppActions>()(
             name,
             createdAt: now,
             items: [],
+            primaryColor: '#053736', // Default color inspired by the user's image
         };
         await addBrandKitToDB(newKit);
         set(state => {

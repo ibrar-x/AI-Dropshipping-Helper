@@ -1,4 +1,3 @@
-
 // types.ts
 // FIX: Import `HarmCategory` and `HarmBlockThreshold` to make them available in this module, then re-export them.
 import { HarmCategory, HarmBlockThreshold } from '@google/genai';
@@ -27,6 +26,26 @@ export interface Folder {
     id: string;
     name: string;
     createdAt: number;
+}
+
+// For Brand Kit
+export type BrandKitItemType = 'logo' | 'color' | 'font';
+
+export interface BrandKitItem {
+  id: string;
+  type: BrandKitItemType;
+  // value will be dataUrl for logo, hex string for color, font name for font
+  value: string; 
+  name: string; // e.g., "Primary Logo", "Primary Red", "Heading Font"
+  url?: string; // For font URLs
+  tags: string[];
+}
+
+export interface BrandKit {
+  id: string;
+  name: string;
+  createdAt: number;
+  items: BrandKitItem[];
 }
 
 
@@ -64,7 +83,7 @@ export interface GenerationOptionsProps extends BaseGenerationOptionsProps {
     onStartAdCreation: (image: GeneratedImage) => void;
 }
 
-export type ToolTab = 'library' | 'ads' | 'visuals' | 'editor' | 'upscaler' | 'ebay';
+export type ToolTab = 'library' | 'ads' | 'visuals' | 'editor' | 'upscaler' | 'ebay' | 'brandkit';
 
 export interface ToastInfo {
   id: number;

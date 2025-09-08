@@ -14,6 +14,7 @@ import { UpscaleIcon } from './icons/UpscaleIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { MagicWandIcon } from './icons/MagicWandIcon';
 import { EbayIcon } from './icons/EbayIcon';
+import { PaletteIcon } from './icons/PaletteIcon';
 
 const tools: { id: ToolTab; name: string; icon: JSX.Element }[] = [
   { id: 'library', name: 'Library', icon: <PhotoIcon className="w-5 h-5" /> },
@@ -21,6 +22,7 @@ const tools: { id: ToolTab; name: string; icon: JSX.Element }[] = [
   { id: 'visuals', name: 'Visual Generator', icon: <MagicWandIcon className="w-5 h-5" /> },
   { id: 'editor', name: 'Image Editor', icon: <BrushIcon className="w-5 h-5" /> },
   { id: 'upscaler', name: 'Image Upscaler', icon: <UpscaleIcon className="w-5 h-5" /> },
+  { id: 'brandkit', name: 'Brand Kit', icon: <PaletteIcon className="w-5 h-5" /> },
   { id: 'ebay', name: 'eBay Listings', icon: <EbayIcon className="w-5 h-5" /> },
 ];
 

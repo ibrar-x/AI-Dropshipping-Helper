@@ -93,6 +93,8 @@ You must generate the following sections, each enclosed in a <details> tag with 
     - Inside this section, create a simple, clean, easily copyable block of all the generated headlines, descriptions, and body copy. Use simple <p> tags with labels like "Headline 1:" for clarity.
 
 Use only the following HTML tags: <details>, <summary>, <h3>, <p>, <ul>, <li>. Do not use any markdown, styles, or other HTML tags. Ensure the output is well-structured and easy to read.`,
+  
+  analyzeImageEnvironment: `You are an expert scene analyst. Look at the provided image and describe its environment, setting, lighting, and overall aesthetic. Focus only on the background and atmosphere. Ignore any foreground subjects. Your description should be a concise paragraph, suitable for use in a text-to-image prompt.`,
 
   suggestVisualPrompts: `You are a world-class creative director for e-commerce brands. The user has provided a reference image of their product. Your task is to generate 4 distinct, creative, and compelling text-to-image prompts for a **background scene or lifestyle setting** that would complement this product.
 
@@ -112,6 +114,12 @@ Example:
     "A vibrant flat-lay of the product on a pastel-colored background, surrounded by related items that tell a story about its use. The camera angle is directly from above."
   ]
 }`,
+  
+  suggestVisualPromptsFromEnv: `You are a creative director. Based on the following scene description, generate {count} distinct variations as text-to-image prompts. Make each prompt unique and creative, exploring different angles, moods, or details based on the original concept.
+
+Scene Description: "{environmentDescription}"
+
+Your entire response MUST be a single, valid JSON object with a single key "suggestions", which is an array of {count} strings. Do not include any other text or explanation.`,
 
   editLogo: `You are a specialized AI logo editing service. You are provided with a logo image and a text instruction. Your only function is to apply the edit and return the modified logo.
 **CRITICAL INSTRUCTIONS:**

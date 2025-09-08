@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import {
@@ -13,6 +12,7 @@ import {
   SafetySetting,
   EbayAuthTokens,
   EbayAccountInfo,
+  BrandKit,
   // FIX: Import HarmCategory and HarmBlockThreshold enums to use their values.
   HarmCategory,
   HarmBlockThreshold,
@@ -28,6 +28,11 @@ import {
     deleteImagesFromDB,
     clearImagesFromDB,
     clearFoldersFromDB,
+    getBrandKitsFromDB,
+    addBrandKitToDB,
+    updateBrandKitInDB,
+    deleteBrandKitFromDB,
+    clearBrandKitsFromDB,
 } from './utils/db';
 import { createThumbnail, getImageDimensions } from './utils/imageUtils';
 import { defaultPrompts } from './prompts';
@@ -86,6 +91,7 @@ interface AppState {
   toasts: ToastInfo[];
   library: LibraryImage[];
   folders: Folder[];
+  brandKits: BrandKit[];
   isLibrarySelectionOpen: boolean;
   librarySelectionConfig: LibrarySelectionConfig | null;
   recreationData: { tool: ToolTab; image: LibraryImage } | null;
@@ -119,6 +125,10 @@ interface AppActions {
   addFolder: (name: string) => Promise<void>;
   updateFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
+  // Brand Kit Actions
+  addBrandKit: (name: string) => Promise<BrandKit>;
+  updateBrandKit: (id: string, updates: Partial<Omit<BrandKit, 'id'>>) => Promise<void>;
+  deleteBrandKit: (id: string) => Promise<void>;
   // Inter-tool functionality
   openLibrarySelector: (config: LibrarySelectionConfig) => void;
   closeLibrarySelector: () => void;
@@ -151,6 +161,7 @@ export const useAppStore = create<AppState & AppActions>()(
     toasts: [],
     library: [],
     folders: [],
+    brandKits: [],
     isLibrarySelectionOpen: false,
     librarySelectionConfig: null,
     recreationData: null,
@@ -167,10 +178,10 @@ export const useAppStore = create<AppState & AppActions>()(
 
     // ACTIONS
     initializeApp: async () => {
-      const [images, folders] = await Promise.all([getImagesFromDB(), getFoldersFromDB()]);
+      const [images, folders, brandKits] = await Promise.all([getImagesFromDB(), getFoldersFromDB(), getBrandKitsFromDB()]);
       const customApiKey = decrypt(localStorage.getItem(API_KEY_STORAGE_KEY) || '');
       const ebayAuthRaw = localStorage.getItem(EBAY_AUTH_STORAGE_KEY);
-      const updates: Partial<AppState> = { library: images, folders, customApiKey };
+      const updates: Partial<AppState> = { library: images, folders, brandKits, customApiKey };
       if (ebayAuthRaw) {
           try {
             const tokens = JSON.parse(decrypt(ebayAuthRaw)) as EbayAuthTokens;
@@ -282,6 +293,38 @@ export const useAppStore = create<AppState & AppActions>()(
             state.folders = state.folders.filter(f => f.id !== id);
         });
     },
+    addBrandKit: async (name) => {
+        const now = Date.now();
+        const newKit: BrandKit = {
+            id: `bk_${now}`,
+            name,
+            createdAt: now,
+            items: [],
+        };
+        await addBrandKitToDB(newKit);
+        set(state => {
+            state.brandKits.push(newKit);
+        });
+        return newKit;
+    },
+    updateBrandKit: async (id, updates) => {
+        const kit = get().brandKits.find(k => k.id === id);
+        if (!kit) return;
+        const updatedKit = { ...kit, ...updates };
+        await updateBrandKitInDB(updatedKit);
+        set(state => {
+            const index = state.brandKits.findIndex(k => k.id === id);
+            if (index !== -1) {
+                state.brandKits[index] = updatedKit;
+            }
+        });
+    },
+    deleteBrandKit: async (id) => {
+        await deleteBrandKitFromDB(id);
+        set(state => {
+            state.brandKits = state.brandKits.filter(k => k.id !== id);
+        });
+    },
     openLibrarySelector: (config) => set({ isLibrarySelectionOpen: true, librarySelectionConfig: config }),
     closeLibrarySelector: () => set({ isLibrarySelectionOpen: false, librarySelectionConfig: null }),
     useAsInput: (tool, image) => {
@@ -367,9 +410,10 @@ export const useAppStore = create<AppState & AppActions>()(
         get().closeSettings();
     },
     clearData: async () => {
-        if (window.confirm('Are you sure you want to delete ALL library images, folders, and settings? This cannot be undone.')) {
+        if (window.confirm('Are you sure you want to delete ALL library images, folders, brand kits, and settings? This cannot be undone.')) {
             await clearImagesFromDB();
             await clearFoldersFromDB();
+            await clearBrandKitsFromDB();
             localStorage.removeItem(SETTINGS_STORAGE_KEY);
             localStorage.removeItem(API_KEY_STORAGE_KEY);
             localStorage.removeItem(EBAY_AUTH_STORAGE_KEY);

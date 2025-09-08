@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { useAppStore } from '../store';
 import { fileToBase64, dataURLtoBase64 } from "../utils/imageUtils";
@@ -146,20 +147,54 @@ export const upscaleImage = async (imageSrc: string, options: UpscaleOptions): P
     };
 };
 
-export const suggestVisualPrompts = async (imageFile: File, count: number, styleReferenceFile?: File): Promise<string[]> => {
+export const analyzeImageEnvironment = async (imageFile: File): Promise<string> => {
     const ai = getAiClient();
     const { prompts, modelConfig, safetySettings } = useAppStore.getState();
     const { base64, mimeType } = await fileToBase64(imageFile);
+
+    const response = await ai.models.generateContent({
+        model: modelConfig.text,
+        contents: {
+            parts: [
+                { text: prompts.analyzeImageEnvironment },
+                { inlineData: { mimeType, data: base64 } }
+            ]
+        },
+        config: {
+            safetySettings,
+        },
+    });
+
+    return response.text.trim();
+};
+
+
+export const suggestVisualPrompts = async (imageFile: File, count: number, styleReferenceFile?: File, environmentDescription?: string): Promise<string[]> => {
+    const ai = getAiClient();
+    const { prompts, modelConfig, safetySettings } = useAppStore.getState();
     
-    const parts: any[] = [
-        { text: prompts.suggestVisualPrompts },
-        { inlineData: { mimeType, data: base64 } }
-    ];
-    
-    if (styleReferenceFile) {
-        parts.push({ text: "\n\nUse this next image as a style reference for the suggestions:"});
-        const styleRef = await fileToBase64(styleReferenceFile);
-        parts.push({ inlineData: { mimeType: styleRef.mimeType, data: styleRef.base64 } });
+    const parts: any[] = [];
+
+    if (environmentDescription) {
+        // New logic: generate variations from text description
+        const request_prompt = prompts.suggestVisualPromptsFromEnv
+            .replace('{environmentDescription}', environmentDescription)
+            .replace(/{count}/g, String(count));
+        parts.push({ text: request_prompt });
+    } else {
+        // Original logic: use product image and optional style ref
+        const { base64, mimeType } = await fileToBase64(imageFile);
+        const request_prompt = prompts.suggestVisualPrompts; // original prompt key
+        parts.push(
+            { text: request_prompt },
+            { inlineData: { mimeType, data: base64 } }
+        );
+        
+        if (styleReferenceFile) {
+            parts.push({ text: "\n\nUse this next image as a style reference for the suggestions:"});
+            const styleRef = await fileToBase64(styleReferenceFile);
+            parts.push({ inlineData: { mimeType: styleRef.mimeType, data: styleRef.base64 } });
+        }
     }
     
     const response = await ai.models.generateContent({

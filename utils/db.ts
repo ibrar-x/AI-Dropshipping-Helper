@@ -1,10 +1,11 @@
 import { openDB, DBSchema } from 'idb';
-import { LibraryImage, Folder } from '../types';
+import { LibraryImage, Folder, BrandKit } from '../types';
 
 const DB_NAME = 'ai-studio-db';
 const IMAGE_STORE_NAME = 'images';
 const FOLDER_STORE_NAME = 'folders';
-const DB_VERSION = 2;
+const BRAND_KIT_STORE_NAME = 'brandKits';
+const DB_VERSION = 3;
 
 interface MyDB extends DBSchema {
   [IMAGE_STORE_NAME]: {
@@ -16,6 +17,11 @@ interface MyDB extends DBSchema {
     value: Folder;
     indexes: { 'by-name': string };
   };
+  [BRAND_KIT_STORE_NAME]: {
+    key: string;
+    value: BrandKit;
+    indexes: { 'by-name': string };
+  }
 }
 
 const dbPromise = openDB<MyDB>(DB_NAME, DB_VERSION, {
@@ -26,6 +32,10 @@ const dbPromise = openDB<MyDB>(DB_NAME, DB_VERSION, {
     if (oldVersion < 2) {
         const folderStore = db.createObjectStore(FOLDER_STORE_NAME, { keyPath: 'id' });
         folderStore.createIndex('by-name', 'name');
+    }
+    if (oldVersion < 3) {
+        const brandKitStore = db.createObjectStore(BRAND_KIT_STORE_NAME, { keyPath: 'id' });
+        brandKitStore.createIndex('by-name', 'name');
     }
   },
 });
@@ -86,4 +96,31 @@ export const deleteFolderFromDB = async (folderId: string): Promise<void> => {
 export const clearFoldersFromDB = async (): Promise<void> => {
     const db = await dbPromise;
     await db.clear(FOLDER_STORE_NAME);
+};
+
+// BRAND KIT CRUD
+export const addBrandKitToDB = async (brandKit: BrandKit): Promise<void> => {
+    const db = await dbPromise;
+    await db.add(BRAND_KIT_STORE_NAME, brandKit);
+};
+
+export const getBrandKitsFromDB = async (): Promise<BrandKit[]> => {
+    const db = await dbPromise;
+    const kits = await db.getAll(BRAND_KIT_STORE_NAME);
+    return kits.sort((a, b) => a.createdAt - b.createdAt);
+};
+
+export const updateBrandKitInDB = async (brandKit: BrandKit): Promise<void> => {
+    const db = await dbPromise;
+    await db.put(BRAND_KIT_STORE_NAME, brandKit);
+};
+
+export const deleteBrandKitFromDB = async (kitId: string): Promise<void> => {
+    const db = await dbPromise;
+    await db.delete(BRAND_KIT_STORE_NAME, kitId);
+};
+
+export const clearBrandKitsFromDB = async (): Promise<void> => {
+    const db = await dbPromise;
+    await db.clear(BRAND_KIT_STORE_NAME);
 };

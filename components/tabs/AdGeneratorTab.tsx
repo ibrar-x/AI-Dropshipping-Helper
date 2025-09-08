@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store';
-import { GeneratedImage, AdBrief, AdCreativeState, LibraryImage } from '../../types';
+import { GeneratedImage, AdBrief, AdCreativeState, LibraryImage, BrandKit, BrandKitItem } from '../../types';
 import ImageUploader from '../ImageUploader';
-import { createThumbnail, downloadImage } from '../../utils/imageUtils';
-import { generateAdImage, generateAdCopy, enhancePromptStream, suggestVisualPrompts, generatePlatformContentStream } from '../../services/geminiService';
+import { createThumbnail, downloadImage, dataURLtoBase64, fileToBase64 } from '../../utils/imageUtils';
+import { generateAdImage, generateAdCopy, enhancePromptStream, suggestVisualPrompts, generatePlatformContentStream, analyzeImageEnvironment } from '../../services/geminiService';
 import { PaperclipIcon } from '../icons/PaperclipIcon';
 import { RefreshIcon } from '../icons/RefreshIcon';
 import { XIcon } from '../icons/XIcon';
@@ -18,6 +18,7 @@ import { PhotoIcon } from '../icons/PhotoIcon';
 import { ChatIcon } from '../icons/ChatIcon';
 import ToggleSwitch from '../ToggleSwitch';
 import { UpscaleIcon } from '../icons/UpscaleIcon';
+import { PaletteIcon } from '../icons/PaletteIcon';
 
 interface AdGeneratorTabProps {
     initialImage?: GeneratedImage | null;
@@ -163,6 +164,59 @@ const TabButton: React.FC<{
     </button>
 );
 
+const BrandKitSelector: React.FC<{
+    selectedKitId: string | null;
+    onKitSelect: (id: string | null) => void;
+    activeTags?: string[];
+    onTagsChange?: (tags: string[]) => void;
+    showTags?: boolean;
+    label?: string;
+}> = ({ selectedKitId, onKitSelect, activeTags, onTagsChange, showTags = true, label="Brand Kit" }) => {
+    const brandKits = useAppStore(state => state.brandKits);
+    const selectedKit = useMemo(() => brandKits.find(k => k.id === selectedKitId), [brandKits, selectedKitId]);
+
+    const handleTagClick = (tag: string) => {
+        if (!activeTags || !onTagsChange) return;
+        if (activeTags.includes(tag)) {
+            onTagsChange(activeTags.filter(t => t !== tag));
+        } else {
+            onTagsChange([...activeTags, tag]);
+        }
+    };
+
+    return (
+        <div className="bg-dark-surface p-3 rounded-lg border border-dark-border space-y-3">
+            <div className="flex items-center gap-2">
+                <PaletteIcon className="w-5 h-5 text-brand-secondary"/>
+                 <select 
+                    value={selectedKitId || ''} 
+                    onChange={e => onKitSelect(e.target.value || null)}
+                    className="flex-1 text-sm rounded-lg border-dark-border bg-dark-input p-2"
+                >
+                    <option value="">{`No ${label}`}</option>
+                    {brandKits.map(kit => <option key={kit.id} value={kit.id}>{kit.name}</option>)}
+                </select>
+            </div>
+            {selectedKit && showTags && activeTags && onTagsChange && (
+                <div>
+                    <label className="font-semibold text-xs block mb-2 text-dark-text-secondary">Include assets with tags:</label>
+                    <div className="flex flex-wrap gap-1.5">
+                        {Array.from(new Set(selectedKit.items.flatMap(item => item.tags))).map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => handleTagClick(tag)}
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${activeTags.includes(tag) ? 'bg-brand-primary text-white' : 'bg-dark-input text-dark-text-primary'}`}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
     const { 
@@ -174,6 +228,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
         updateAdGeneratorResult,
         openLibrarySelector,
         openUpscaler,
+        brandKits,
     } = useAppStore();
     
     const [step, setStep] = useState<AdGenStep>('UPLOAD');
@@ -184,6 +239,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
     
     // Placement Step State
     const [placementCreativeState, setPlacementCreativeState] = useState<AdCreativeState>(initialCreativeState);
+    const [placementBrandKitId, setPlacementBrandKitId] = useState<string | null>(null);
     const placementEditorContainerRef = useRef<HTMLDivElement>(null);
     
     // Visuals Step State
@@ -192,6 +248,25 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState<number | null>(null);
     const [styleReferenceImage, setStyleReferenceImage] = useState<File | null>(null);
+    const [environmentDescription, setEnvironmentDescription] = useState<string>('');
+    const [isAnalyzingEnv, setIsAnalyzingEnv] = useState(false);
+
+    // Brand Kit State (for Visuals step)
+    const [visualsBrandKitId, setVisualsBrandKitId] = useState<string | null>(null);
+    const [activeBrandKitTags, setActiveBrandKitTags] = useState<string[]>([]);
+
+    useEffect(() => {
+        if(visualsBrandKitId) {
+            const kit = brandKits.find(k => k.id === visualsBrandKitId);
+            if(kit) {
+                const allTags = Array.from(new Set(kit.items.flatMap(i => i.tags)));
+                setActiveBrandKitTags(allTags);
+            }
+        } else {
+            setActiveBrandKitTags([]);
+        }
+    }, [visualsBrandKitId, brandKits]);
+
 
     const [platforms, setPlatforms] = useState<string[]>(INITIAL_PLATFORMS);
     const [platform, setPlatform] = useState(INITIAL_PLATFORMS[0]);
@@ -232,6 +307,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
         setSourceImage(null);
         setProductTopic('');
         setPlacementCreativeState(initialCreativeState);
+        setPlacementBrandKitId(null);
         setNumVariations(2);
         setVisualPrompts(Array(2).fill(''));
         setPlatforms(INITIAL_PLATFORMS);
@@ -251,6 +327,9 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
         setIsGeneratingAdCopy(false);
         setPlatformGeneratedContent('');
         setIsGeneratingPlatformContent(false);
+        setEnvironmentDescription('');
+        setVisualsBrandKitId(null);
+        setActiveBrandKitTags([]);
     }
 
     const handleImageUpload = useCallback(async (image: GeneratedImage) => {
@@ -276,6 +355,35 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
             clearRecreationData();
         }
     }, [initialImage, sourceImage, handleImageUpload, clearRecreationData]);
+    
+    useEffect(() => {
+        if (placementBrandKitId) {
+            const kit = brandKits.find(k => k.id === placementBrandKitId);
+            const logoItem = kit?.items.find(i => i.type === 'logo');
+
+            if (logoItem) {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    setLogoImage(img);
+                    // Convert data URL back to a File object for consistency
+                    fetch(logoItem.value)
+                        .then(res => res.blob())
+                        .then(blob => {
+                            const file = new File([blob], logoItem.name || 'logo.png', { type: blob.type });
+                            setLogoFile(file);
+                        });
+                    setPlacementCreativeState(prev => ({ ...prev, showLogo: true }));
+                };
+                img.src = logoItem.value;
+            } else {
+                setLogoImage(null);
+                setLogoFile(null);
+            }
+        } else {
+             // Don't clear if a manual file is there, allow override
+        }
+    }, [placementBrandKitId, brandKits]);
 
     // Adjust the visual prompts array size when numVariations changes
     useEffect(() => {
@@ -318,16 +426,36 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
             }
         });
     };
+    
+    const handleAnalyzeEnvironment = async () => {
+        if (!styleReferenceImage || isAnalyzingEnv) return;
+        setIsAnalyzingEnv(true);
+        setEnvironmentDescription('');
+        try {
+            const description = await analyzeImageEnvironment(styleReferenceImage);
+            setEnvironmentDescription(description);
+            addToast({ title: 'Environment Analyzed', message: 'You can now edit the description and generate prompts.', type: 'success' });
+        } catch (error) {
+            console.error("Failed to analyze environment", error);
+            addToast({ title: 'Analysis Failed', message: error instanceof Error ? error.message : 'Unknown error.', type: 'error' });
+        } finally {
+            setIsAnalyzingEnv(false);
+        }
+    };
 
     const handleSuggestPrompts = async () => {
-        if (!sourceImage || isLoadingSuggestions) return;
+        if ((!sourceImage && !environmentDescription) || isLoadingSuggestions) return;
         
         setIsLoadingSuggestions(true);
         try {
-            const res = await fetch(sourceImage.src);
-            const blob = await res.blob();
-            const imageFile = new File([blob], "product.png", { type: blob.type });
-            const suggestions = await suggestVisualPrompts(imageFile, numVariations, styleReferenceImage || undefined);
+            let imageFile: File | undefined = undefined;
+            if (sourceImage) {
+                 const res = await fetch(sourceImage.src);
+                 const blob = await res.blob();
+                 imageFile = new File([blob], "product.png", { type: blob.type });
+            }
+           
+            const suggestions = await suggestVisualPrompts(imageFile!, numVariations, styleReferenceImage || undefined, environmentDescription || undefined);
             
             const finalSuggestions = Array(numVariations).fill('');
              for (let i = 0; i < numVariations; i++) {
@@ -414,6 +542,29 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
             referenceInputs.push(logoFile);
             logoIndex = referenceInputs.length -1;
         }
+
+        let brandKitPrompt = '';
+        if (visualsBrandKitId) {
+            const kit = brandKits.find(k => k.id === visualsBrandKitId);
+            if (kit) {
+                const includedItems = kit.items.filter(item => item.tags.some(tag => activeBrandKitTags.includes(tag)));
+                const colors = includedItems.filter(i => i.type === 'color').map(c => `${c.name} (${c.value})`);
+                const fonts = includedItems.filter(i => i.type === 'font').map(f => f.value);
+                const logos = includedItems.filter(i => i.type === 'logo');
+
+                let promptParts = [];
+                if (colors.length > 0) promptParts.push(`Brand Colors: ${colors.join(', ')}.`);
+                if (fonts.length > 0) promptParts.push(`Brand Fonts: ${fonts.join(', ')}.`);
+                if (promptParts.length > 0) brandKitPrompt = `Consider the following brand identity: ${promptParts.join(' ')} `;
+
+                for (const logo of logos) {
+                    const res = await fetch(logo.value);
+                    const blob = await res.blob();
+                    const file = new File([blob], logo.name, { type: blob.type });
+                    referenceInputs.push(file);
+                }
+            }
+        }
         
         if (styleReferenceImage) {
             referenceInputs.push(styleReferenceImage);
@@ -443,7 +594,7 @@ const AdGeneratorTab: React.FC<AdGeneratorTabProps> = ({ initialImage }) => {
                 placementInstructions += `Blend all elements seamlessly and photorealistically. The final output must be a single, cohesive image.`;
                 
                 const finalPrompt = `You are an expert AI image editor and compositor. Your task is to generate an image based on a user prompt and then composite several elements into it according to detailed instructions.
-
+${brandKitPrompt}
 User prompt for the new background scene: "${userPrompt}"
 
 CRITICAL COMPOSITING INSTRUCTIONS:
@@ -479,6 +630,7 @@ ${placementInstructions}`;
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             setLogoFile(file);
+            setPlacementBrandKitId(null); // Manual upload overrides brand kit
 
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -658,6 +810,12 @@ ${placementInstructions}`;
                                     />
                                     <p className="text-xs text-dark-text-secondary mt-1">This helps generate more accurate ad copy later.</p>
                                 </div>
+                                <BrandKitSelector
+                                    label="Brand Kit Logo"
+                                    selectedKitId={placementBrandKitId}
+                                    onKitSelect={setPlacementBrandKitId}
+                                    showTags={false}
+                                />
                                 <ToggleSwitch 
                                     label="Show Headline" 
                                     enabled={placementCreativeState.showHeadline} 
@@ -712,7 +870,7 @@ ${placementInstructions}`;
                  return (
                     <div className="flex flex-col h-full overflow-hidden">
                         <div className="flex-1 overflow-y-auto">
-                           <fieldset disabled={isLoadingSuggestions || isEnhancingPrompt !== null} className="w-full max-w-3xl mx-auto p-4 md:p-6 space-y-4">
+                           <fieldset disabled={isProcessing || isLoadingSuggestions || isEnhancingPrompt !== null || isAnalyzingEnv} className="w-full max-w-3xl mx-auto p-4 md:p-6 space-y-4">
                                 <h2 className="text-3xl font-bold text-center">Design Your Ad Visuals</h2>
                                 <p className="text-center text-dark-text-secondary">Describe the background scene for your ad. The AI will blend your product and text into it.</p>
                                 
@@ -747,25 +905,57 @@ ${placementInstructions}`;
                                         <input type="number" min="1" max="8" value={numVariations} onChange={e => setNumVariations(parseInt(e.target.value, 10) || 1)} className="w-full text-sm rounded-lg border-dark-border bg-dark-input p-2" />
                                     </div>
                                 </div>
+                                
+                                <BrandKitSelector
+                                    selectedKitId={visualsBrandKitId}
+                                    onKitSelect={setVisualsBrandKitId}
+                                    activeTags={activeBrandKitTags}
+                                    onTagsChange={setActiveBrandKitTags}
+                                />
 
-                                <div className="bg-dark-surface p-3 rounded-lg border border-dark-border">
-                                    <label className="font-semibold text-sm block mb-2 text-dark-text-secondary">Style Reference (Optional)</label>
-                                    <p className="text-xs text-dark-text-secondary mb-2">Upload an image to influence the style and composition of the generated visuals.</p>
-                                    <div className="flex items-center gap-2">
-                                        <label htmlFor="style-ref-upload" className="flex-1 cursor-pointer bg-dark-input border border-dark-border rounded-md py-1.5 px-2.5 text-sm font-medium text-dark-text-secondary hover:bg-dark-border flex items-center gap-2">
-                                            <PaperclipIcon className="w-4 h-4" />
-                                            <span className="truncate">{styleReferenceImage?.name ?? 'Upload style reference'}</span>
-                                        </label>
-                                        <input id="style-ref-upload" type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleStyleReferenceChange} />
-                                        <button onClick={handleSelectStyleFromLibrary} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Select from Library">
-                                            <PhotoIcon className="w-5 h-5" />
-                                        </button>
-                                        {styleReferenceImage && (
-                                            <button onClick={() => setStyleReferenceImage(null)} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Remove style reference">
-                                                <XIcon className="w-4 h-4" />
+                                <div className="bg-dark-surface p-3 rounded-lg border border-dark-border space-y-2">
+                                    <div>
+                                        <label className="font-semibold text-sm block text-dark-text-secondary">Style/Environment Reference (Optional)</label>
+                                        <p className="text-xs text-dark-text-secondary mb-2">Upload an image to influence the style, or analyze its environment for new ideas.</p>
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor="style-ref-upload" className="flex-1 cursor-pointer bg-dark-input border border-dark-border rounded-md py-1.5 px-2.5 text-sm font-medium text-dark-text-secondary hover:bg-dark-border flex items-center gap-2">
+                                                <PaperclipIcon className="w-4 h-4" />
+                                                <span className="truncate">{styleReferenceImage?.name ?? 'Upload reference image'}</span>
+                                            </label>
+                                            <input id="style-ref-upload" type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleStyleReferenceChange} />
+                                            <button onClick={handleSelectStyleFromLibrary} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Select from Library">
+                                                <PhotoIcon className="w-5 h-5" />
                                             </button>
-                                        )}
+                                            {styleReferenceImage && (
+                                                <button onClick={() => { setStyleReferenceImage(null); setEnvironmentDescription(''); }} className="p-2 bg-dark-input rounded-md hover:bg-dark-border" title="Remove style reference">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
+                                    {styleReferenceImage && (
+                                        <div className="pt-2 border-t border-dark-border/50">
+                                            <button
+                                                onClick={handleAnalyzeEnvironment}
+                                                disabled={isAnalyzingEnv || isLoadingSuggestions}
+                                                className="w-full flex items-center justify-center gap-2 text-sm font-semibold bg-dark-input hover:bg-dark-border border border-dark-border px-4 py-2 rounded-md disabled:opacity-50"
+                                            >
+                                                <MagicWandIcon className={`w-4 h-4 ${isAnalyzingEnv ? 'animate-pulse' : ''}`} />
+                                                <span>{isAnalyzingEnv ? 'Analyzing...' : 'Analyze Environment for Prompts'}</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                    {environmentDescription && (
+                                        <div className="p-2 bg-dark-input/50 rounded-md">
+                                            <label className="text-xs font-semibold text-dark-text-secondary">Analyzed Environment (Editable)</label>
+                                            <textarea
+                                                value={environmentDescription}
+                                                onChange={e => setEnvironmentDescription(e.target.value)}
+                                                rows={2}
+                                                className="w-full text-xs text-dark-text-secondary bg-transparent focus:outline-none focus:ring-1 focus:ring-brand-primary rounded p-1"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <div className="space-y-4">
@@ -783,7 +973,7 @@ ${placementInstructions}`;
                                     ))}
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button onClick={handleSuggestPrompts} disabled={isLoadingSuggestions} className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold bg-dark-input hover:bg-dark-border border border-dark-border px-4 py-2 rounded-md">
+                                    <button onClick={handleSuggestPrompts} disabled={isLoadingSuggestions} className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold bg-dark-input hover:bg-dark-border border border-dark-border px-4 py-2 rounded-md disabled:opacity-50">
                                         <MagicWandIcon className={`w-4 h-4 ${isLoadingSuggestions ? 'animate-pulse' : ''}`} />
                                         {isLoadingSuggestions ? 'Getting ideas...' : 'Suggest Prompts'}
                                     </button>
@@ -798,7 +988,7 @@ ${placementInstructions}`;
                             <div className="w-full max-w-3xl mx-auto">
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => setStep('PLACEMENT')} className="text-sm font-semibold bg-dark-input hover:bg-dark-border border border-dark-border px-4 py-3 rounded-md">Back</button>
-                                    <button onClick={handleGenerateVisuals} disabled={isProcessing || isLoadingSuggestions || isEnhancingPrompt !== null} className="flex-1 bg-brand-primary hover:bg-brand-secondary text-white font-bold px-4 py-3 rounded-md disabled:opacity-50">
+                                    <button onClick={handleGenerateVisuals} disabled={isProcessing || isLoadingSuggestions || isEnhancingPrompt !== null || isAnalyzingEnv} className="flex-1 bg-brand-primary hover:bg-brand-secondary text-white font-bold px-4 py-3 rounded-md disabled:opacity-50">
                                         {isProcessing ? processingMessage : `Generate ${numVariations} Visuals`}
                                     </button>
                                 </div>

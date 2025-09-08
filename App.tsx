@@ -11,6 +11,7 @@ import UpscalerTab from './components/tabs/UpscalerTab';
 import LibraryTab from './components/tabs/LibraryTab';
 import VisualGeneratorTab from './components/tabs/VisualGeneratorTab';
 import EbayTab from './components/tabs/EbayTab';
+import BrandKitTab from './components/tabs/BrandKitTab';
 import ImageUpscaler from './components/ImageUpscaler';
 import UpscaleConfirmationModal from './components/UpscaleConfirmationModal';
 import LibrarySelectionModal from './components/LibrarySelectionModal';
@@ -116,6 +117,9 @@ const App: React.FC = () => {
                 </div>
                 <div hidden={activeTab !== 'library'} className="w-full h-full">
                   <LibraryTab />
+                </div>
+                 <div hidden={activeTab !== 'brandkit'} className="w-full h-full">
+                  <BrandKitTab />
                 </div>
                 <div hidden={activeTab !== 'ebay'} className="w-full h-full">
                   <EbayTab />

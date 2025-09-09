@@ -18,3 +18,4 @@ View your app in AI Studio: https://ai.studio/apps/drive/10dN-UPbR9Jk6Rr9TNZpDZJ
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+# AI Product Lifestyle Generator - Updated Tue Sep  9 04:25:36 BST 2025
